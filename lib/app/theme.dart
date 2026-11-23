@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 
-/// WCAG AAA high-contrast dark theme optimized for low-vision & TalkBack users.
+/// Openetra brand design system: Deep Aubergine, Dark Plum, Refined Lavender,
+/// and Warm Orange calibrated for WCAG AAA (>= 7:1) readability and calm focus.
 class OpenetraTheme {
-  static const Color background = Color(0xFF000000);
-  static const Color surface = Color(0xFF111418);
-  static const Color surfaceElevated = Color(0xFF1A2028);
-  static const Color primaryText = Color(0xFFFFFFFF);
-  static const Color secondaryText = Color(0xFFE0E6ED);
-  static const Color accent = Color(0xFFFFD600);
-  static const Color accentText = Color(0xFF000000);
-  static const Color hazardCritical = Color(0xFFFF5252);
-  static const Color hazardWarning = Color(0xFFFFAB00);
-  static const Color okGreen = Color(0xFF69F0AE);
-  static const Color border = Color(0xFF4A5568);
+  static const Color background = Color(0xFF120B1A); // Deep Aubergine
+  static const Color surface = Color(0xFF1E132B); // Dark Plum
+  static const Color surfaceElevated = Color(0xFF2B1C3D); // Layered Plum
+  static const Color primaryText = Color(0xFFF8F5FF); // Soft White (>15:1)
+  static const Color secondaryText = Color(0xFFCEC4E0); // Muted Lavender-Grey (>10:1)
+  static const Color accentLavender = Color(0xFFC7A6FF); // Primary Refined Lavender
+  static const Color accent = Color(0xFFFF9A3C); // Secondary Warm Orange
+  static const Color accentText = Color(0xFF120B1A); // Deep Aubergine on accent
+  static const Color hazardCritical = Color(0xFFFF6B6B); // Accessible muted red
+  static const Color hazardWarning = Color(0xFFFFB84D); // Warm amber
+  static const Color okGreen = Color(0xFF6FE3A8); // Accessible muted green
+  static const Color border = Color(0xFF53416B); // Refined plum hairline
 
   static ThemeData buildDarkTheme() {
     return ThemeData(
@@ -20,9 +22,9 @@ class OpenetraTheme {
       scaffoldBackgroundColor: background,
       canvasColor: background,
       colorScheme: const ColorScheme.dark(
-        primary: accent,
+        primary: accentLavender,
         onPrimary: accentText,
-        secondary: okGreen,
+        secondary: accent,
         onSecondary: accentText,
         surface: surface,
         onSurface: primaryText,
@@ -33,6 +35,7 @@ class OpenetraTheme {
         headlineMedium: TextStyle(
           fontSize: 24,
           fontWeight: FontWeight.w700,
+          letterSpacing: -0.2,
           color: primaryText,
         ),
         titleLarge: TextStyle(
@@ -67,7 +70,7 @@ class OpenetraTheme {
           backgroundColor: surfaceElevated,
           foregroundColor: primaryText,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             side: const BorderSide(color: border, width: 1.5),
           ),
           textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),

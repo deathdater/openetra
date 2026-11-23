@@ -14,6 +14,14 @@ enum HapticPattern {
   warning,
   critical,
   degraded,
+  dialFocusTick,
+  dialSelect,
+  dialSubmenuEnter,
+  dialNavigateBack,
+  dialExitWarn,
+  dialOpStart,
+  dialOpComplete,
+  dialOpError,
 }
 
 /// Accessibility-ready response produced after OpenetraSafetyPolicy filtering.

@@ -7,6 +7,7 @@ import '../../../core/resource_management/bloc/device_resource_bloc.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
 import '../../emergency/bloc/emergency_bloc.dart';
 import '../../emergency/presentation/emergency_assistance_screen.dart';
+import '../../dial/bloc/assistive_dial_bloc.dart';
 import '../../flashlight/domain/intelligent_flashlight_controller.dart';
 import '../../flashlight/presentation/flashlight_settings_screen.dart';
 import '../../floating_companion/bloc/floating_companion_bloc.dart';
@@ -22,12 +23,14 @@ class SettingsScreen extends StatelessWidget {
     this.emergencyBloc,
     this.gestureBloc,
     this.floatingCompanionBloc,
+    this.dialBloc,
   });
 
   final IntelligentFlashlightController? flashlightController;
   final EmergencyBloc? emergencyBloc;
   final GestureAutomationBloc? gestureBloc;
   final FloatingCompanionBloc? floatingCompanionBloc;
+  final AssistiveDialBloc? dialBloc;
 
   static const List<({String locale, String label})> _languages = [
     (locale: 'en-IN', label: 'English (India)'),
@@ -225,6 +228,75 @@ class SettingsScreen extends StatelessWidget {
                       },
                     ),
                     const SizedBox(height: 12),
+                  ],
+                  if (dialBloc != null) ...[
+                    BlocBuilder<AssistiveDialBloc, AssistiveDialState>(
+                      bloc: dialBloc,
+                      builder: (context, dialState) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Semantics(
+                              header: true,
+                              child: Text(
+                                'Dial Interaction, Haptics & Motion',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            AccessibleActionTile(
+                              title: dialState.hapticsEnabled
+                                  ? 'Dial Haptics: Enabled'
+                                  : 'Dial Haptics: Disabled',
+                              subtitle:
+                                  'Distinctive vibration patterns for focus, selection, back, and alerts',
+                              semanticHint: 'Double tap to toggle dial haptic feedback',
+                              icon: Icons.vibration_outlined,
+                              filledAccent: dialState.hapticsEnabled,
+                              onPressed: () => dialBloc!.add(
+                                DialUpdatePreferences(
+                                  hapticsEnabled: !dialState.hapticsEnabled,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            AccessibleActionTile(
+                              title: dialState.detailedAnnouncements
+                                  ? 'Dial Voice Verbosity: Detailed'
+                                  : 'Dial Voice Verbosity: Concise',
+                              subtitle:
+                                  'Detailed speaks option name and purpose; Concise speaks option title only',
+                              semanticHint: 'Double tap to switch dial voice verbosity',
+                              icon: Icons.record_voice_over_outlined,
+                              filledAccent: dialState.detailedAnnouncements,
+                              onPressed: () => dialBloc!.add(
+                                DialUpdatePreferences(
+                                  detailedAnnouncements:
+                                      !dialState.detailedAnnouncements,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            AccessibleActionTile(
+                              title: dialState.reducedMotion
+                                  ? 'Dial Reduced Motion: Enabled'
+                                  : 'Dial Reduced Motion: Follow System',
+                              subtitle:
+                                  'Disables glow pulse and waveform animations during operations',
+                              semanticHint: 'Double tap to toggle dial reduced motion',
+                              icon: Icons.motion_photos_off_outlined,
+                              filledAccent: dialState.reducedMotion,
+                              onPressed: () => dialBloc!.add(
+                                DialUpdatePreferences(
+                                  reducedMotion: !dialState.reducedMotion,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        );
+                      },
+                    ),
                   ],
                   AccessibleActionTile(
                     title: 'Delete All Personal Data',

@@ -1,5 +1,12 @@
 # Openetra Context Changelog
 
+## [2.0.0-assistive-dial] - 2026-11-23
+### Added & Verified
+- Redesigned Openetra's primary experience into the radial **Intelligent Assistive Dial** (`AssistiveDialPage`, `AssistiveDial`, `DialCenter`, `AssistiveDialBloc`, `DialGestureAnalyzer`, `OpenetraDialMenuTree`) with Deep Aubergine / Dark Plum / Refined Lavender / Warm Orange WCAG AAA theme, 10-pattern haptic vocabulary (`HapticFeedbackManager` + `HapticsPlugin.kt`), zero-backlog selection TTS (`AudioArbitrator.announceSelection`), and >=64 dp TalkBack-safe alternative controls.
+- Preserved every existing Openetra workflow and configuration screen (including `HomeScreen` Classic List View) and added Dial Haptics / Voice Verbosity / Reduced Motion preferences in `SettingsScreen`.
+- Authored `OPENETRA_CURRENT_UI_INVENTORY.md`, `OPENETRA_DIAL_FEATURE_MAPPING.md`, `OPENETRA_DIAL_INTERACTION_SPECIFICATION.md`, `OPENETRA_DIAL_DESIGN_SYSTEM.md`, and `OPENETRA_DIAL_IMPLEMENTATION_REPORT.md`.
+- Verified with `flutter analyze` (`No issues found!`), `flutter test -r expanded` (`61/61` passing), R8 `app-release.apk` (`148,952,310` bytes, zero network permissions), and Android 15 ARM64 emulator cold launch (`1581 ms`, zero crashes).
+
 ## [1.5.0-assistive-controls-verified] - 2026-11-23
 ### Added & Verified
 - Authored `AssistiveControlsInstrumentedTest.kt` and verified all 3 Android instrumentation suites on `Medium_Phone_API_35` (`arm64-v8a`, Android 15): `AssistiveControlsInstrumentedTest` (3/3 in `0.21 s`: Keystore AES-256-GCM, LiteRT `1.4.2` hand landmarks load `88 ms` / inference `34 ms`, `FloatingOrbView` + `specialUse` FGS), `MirageNativeInstrumentedTest` (1/1 in `1.013 s`), and `IndicAndSpecialistInstrumentedTest` (1/1 in `0.913 s`).

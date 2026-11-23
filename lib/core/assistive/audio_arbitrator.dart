@@ -81,4 +81,26 @@ class AudioArbitrator {
   void interruptAllSpeech() {
     audioBloc.add(const InterruptSpeechRequested());
   }
+
+  /// Cancels any obsolete dial selection announcement immediately before
+  /// speaking the newly focused option so rapid browsing never queues a backlog.
+  void announceSelection({
+    required String spokenText,
+    String locale = 'en-IN',
+  }) {
+    audioBloc.add(const InterruptSpeechRequested());
+    audioBloc.add(
+      SpeakAssistantResponse(
+        AssistantResponse(
+          responseId: _uuid.v4(),
+          spokenText: spokenText,
+          displaySummary: spokenText,
+          locale: locale,
+          priority: SpeechPriority.normal,
+          hapticPattern: HapticPattern.none,
+          timestamp: _clock(),
+        ),
+      ),
+    );
+  }
 }

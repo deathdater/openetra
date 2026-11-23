@@ -10,6 +10,7 @@ import '../core/assistive/permission_coordinator.dart';
 import '../core/assistive/task_orchestrator.dart';
 import '../core/audio/bloc/audio_bloc.dart';
 import '../core/audio/haptic_feedback_service.dart';
+import '../core/haptics/haptic_feedback_manager.dart';
 import '../core/audio/native_offline_asr_provider.dart';
 import '../core/audio/speech_controller.dart';
 import '../core/camera/camera_controller_bridge.dart';
@@ -24,6 +25,8 @@ import '../core/safety/bloc/safety_bloc.dart';
 import '../core/safety/openetra_safety_policy.dart';
 import '../core/storage/openetra_database.dart';
 import '../features/currency/domain/currency_recognition_service.dart';
+import '../features/dial/bloc/assistive_dial_bloc.dart';
+import '../features/dial/presentation/pages/assistive_dial_page.dart';
 import '../features/emergency/bloc/emergency_bloc.dart';
 import '../features/emergency/data/protected_contact_store.dart';
 import '../features/emergency/domain/emergency_assistance_service.dart';
@@ -87,6 +90,8 @@ class OpenetraDependencies {
     required this.flashlightController,
     required this.gestureBloc,
     required this.floatingCompanionBloc,
+    required this.hapticManager,
+    required this.dialBloc,
   });
 
   final OpenetraDatabase database;
@@ -121,6 +126,8 @@ class OpenetraDependencies {
   final IntelligentFlashlightController flashlightController;
   final GestureAutomationBloc gestureBloc;
   final FloatingCompanionBloc floatingCompanionBloc;
+  final HapticFeedbackManager hapticManager;
+  final AssistiveDialBloc dialBloc;
 
   static Future<OpenetraDependencies> bootstrap({
     required OpenetraDatabase database,
@@ -298,6 +305,17 @@ class OpenetraDependencies {
       audioBloc: audioBloc,
     );
 
+    final hapticManager = HapticFeedbackManager(service: haptics);
+    final dialBloc = AssistiveDialBloc(
+      taskOrchestrator: taskOrchestrator,
+      audioArbitrator: audioArbitrator,
+      hapticManager: hapticManager,
+      onFlashlightExplicit: (on) async {
+        await flashlightController.setManualTorch(on);
+      },
+      onToggleContinuousHazard: coordinator.toggleContinuousHazardAwareness,
+    );
+
     settingsBloc.add(const LoadSettings());
     objectBloc.add(const LoadPersonalObjects());
     safetyBloc.add(const LoadSafetyHistory());
@@ -339,6 +357,8 @@ class OpenetraDependencies {
       flashlightController: flashlightController,
       gestureBloc: gestureBloc,
       floatingCompanionBloc: floatingCompanionBloc,
+      hapticManager: hapticManager,
+      dialBloc: dialBloc,
     );
   }
 
@@ -465,10 +485,12 @@ class OpenetraApp extends StatefulWidget {
     super.key,
     required this.deps,
     this.skipOnboarding = false,
+    this.useClassicHome = false,
   });
 
   final OpenetraDependencies deps;
   final bool skipOnboarding;
+  final bool useClassicHome;
 
   @override
   State<OpenetraApp> createState() => _OpenetraAppState();
@@ -502,6 +524,7 @@ class _OpenetraAppState extends State<OpenetraApp> {
         BlocProvider.value(value: widget.deps.emergencyBloc),
         BlocProvider.value(value: widget.deps.gestureBloc),
         BlocProvider.value(value: widget.deps.floatingCompanionBloc),
+        BlocProvider.value(value: widget.deps.dialBloc),
       ],
       child: MaterialApp(
         title: 'Openetra',
@@ -516,7 +539,9 @@ class _OpenetraAppState extends State<OpenetraApp> {
             }
           },
           child: _showHome
-              ? HomeScreen(coordinator: widget.deps.coordinator)
+              ? (widget.useClassicHome
+                  ? HomeScreen(coordinator: widget.deps.coordinator)
+                  : AssistiveDialPage(coordinator: widget.deps.coordinator))
               : OnboardingScreen(
                   onCompleted: () => setState(() => _showHome = true),
                 ),

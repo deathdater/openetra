@@ -56,7 +56,9 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
 
-    await tester.pumpWidget(OpenetraApp(deps: deps, skipOnboarding: true));
+    await tester.pumpWidget(
+      OpenetraApp(deps: deps, skipOnboarding: true, useClassicHome: true),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
