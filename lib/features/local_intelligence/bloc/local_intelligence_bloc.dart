@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/storage/openetra_database.dart';
@@ -97,6 +98,45 @@ class AskHistoricalQuestion extends LocalIntelligenceEvent {
   List<Object?> get props => [question];
 }
 
+class DownloadAndInstallModel extends LocalIntelligenceEvent {
+  const DownloadAndInstallModel({
+    required this.modelId,
+    this.authToken,
+  });
+
+  final String modelId;
+  final String? authToken;
+
+  @override
+  List<Object?> get props => [modelId, authToken];
+}
+
+class CancelModelDownload extends LocalIntelligenceEvent {
+  const CancelModelDownload();
+}
+
+class ActivateInstalledModel extends LocalIntelligenceEvent {
+  const ActivateInstalledModel(this.modelId);
+  final String modelId;
+
+  @override
+  List<Object?> get props => [modelId];
+}
+
+class _ModelDownloadProgressUpdated extends LocalIntelligenceEvent {
+  const _ModelDownloadProgressUpdated(this.progress);
+  final ModelDownloadProgress progress;
+
+  @override
+  List<Object?> get props => [
+        progress.modelId,
+        progress.downloadedBytes,
+        progress.totalBytes,
+        progress.progress,
+        progress.status,
+      ];
+}
+
 class VerifyAndActivateModel extends LocalIntelligenceEvent {
   const VerifyAndActivateModel({
     required this.modelId,
@@ -134,6 +174,11 @@ class LocalIntelligenceState extends Equatable {
     this.deviceProfile = DeviceHardwareProfile.unknown,
     this.history = const [],
     this.installedModelIds = const {},
+    this.installedModelPaths = const {},
+    this.downloadingModelId,
+    this.downloadProgress = 0.0,
+    this.downloadedBytes = 0,
+    this.totalDownloadBytes = 0,
     this.activeFilterType,
     this.activeFilterStatus,
     this.searchQuery = '',
@@ -146,6 +191,11 @@ class LocalIntelligenceState extends Equatable {
   final DeviceHardwareProfile deviceProfile;
   final List<OperationHistoryEvent> history;
   final Set<String> installedModelIds;
+  final Map<String, String> installedModelPaths;
+  final String? downloadingModelId;
+  final double downloadProgress;
+  final int downloadedBytes;
+  final int totalDownloadBytes;
   final OperationType? activeFilterType;
   final OperationStatus? activeFilterStatus;
   final String searchQuery;
@@ -158,6 +208,12 @@ class LocalIntelligenceState extends Equatable {
     DeviceHardwareProfile? deviceProfile,
     List<OperationHistoryEvent>? history,
     Set<String>? installedModelIds,
+    Map<String, String>? installedModelPaths,
+    String? downloadingModelId,
+    bool clearDownloadingModel = false,
+    double? downloadProgress,
+    int? downloadedBytes,
+    int? totalDownloadBytes,
     OperationType? activeFilterType,
     bool clearFilterType = false,
     OperationStatus? activeFilterStatus,
@@ -174,6 +230,19 @@ class LocalIntelligenceState extends Equatable {
       deviceProfile: deviceProfile ?? this.deviceProfile,
       history: history ?? this.history,
       installedModelIds: installedModelIds ?? this.installedModelIds,
+      installedModelPaths: installedModelPaths ?? this.installedModelPaths,
+      downloadingModelId: clearDownloadingModel
+          ? null
+          : (downloadingModelId ?? this.downloadingModelId),
+      downloadProgress: clearDownloadingModel
+          ? 0.0
+          : (downloadProgress ?? this.downloadProgress),
+      downloadedBytes: clearDownloadingModel
+          ? 0
+          : (downloadedBytes ?? this.downloadedBytes),
+      totalDownloadBytes: clearDownloadingModel
+          ? 0
+          : (totalDownloadBytes ?? this.totalDownloadBytes),
       activeFilterType:
           clearFilterType ? null : (activeFilterType ?? this.activeFilterType),
       activeFilterStatus: clearFilterStatus
@@ -194,6 +263,11 @@ class LocalIntelligenceState extends Equatable {
         deviceProfile,
         history,
         installedModelIds,
+        installedModelPaths,
+        downloadingModelId,
+        downloadProgress,
+        downloadedBytes,
+        totalDownloadBytes,
         activeFilterType,
         activeFilterStatus,
         searchQuery,
@@ -219,6 +293,10 @@ class LocalIntelligenceBloc
     on<RefreshOperationHistory>(_onRefreshHistory);
     on<RequestActivitySummary>(_onRequestSummary);
     on<AskHistoricalQuestion>(_onAskQuestion);
+    on<DownloadAndInstallModel>(_onDownloadAndInstallModel);
+    on<CancelModelDownload>(_onCancelModelDownload);
+    on<ActivateInstalledModel>(_onActivateInstalledModel);
+    on<_ModelDownloadProgressUpdated>(_onDownloadProgressUpdated);
     on<VerifyAndActivateModel>(_onVerifyAndActivateModel);
     on<DeleteDownloadedModel>(_onDeleteModel);
     on<ClearOperationHistoryRequested>(_onClearHistory);
@@ -228,6 +306,13 @@ class LocalIntelligenceBloc
   final OpenetraDatabase database;
   final LocalLlmEngine llmEngine;
   final SummaryOrchestrator summaryOrchestrator;
+  StreamSubscription<ModelDownloadProgress>? _progressSub;
+
+  @override
+  Future<void> close() async {
+    await _progressSub?.cancel();
+    return super.close();
+  }
 
   Future<void> _onLoad(
     LoadLocalIntelligence event,
@@ -238,15 +323,24 @@ class LocalIntelligenceBloc
     await database.pruneExpiredOperationHistory();
     final rows = await database.queryOperationHistory(limit: 200);
     final models = await database.listInstalledLocalModels();
-    final installedIds = models
-        .where((m) => m['status'] == 'verified')
-        .map((m) => m['model_id'].toString())
-        .toSet();
+    final installedIds = <String>{};
+    final installedPaths = <String, String>{};
+    for (final m in models) {
+      if (m['status'] == 'verified') {
+        final id = m['model_id'].toString();
+        installedIds.add(id);
+        final path = m['local_path']?.toString() ?? '';
+        if (path.isNotEmpty) {
+          installedPaths[id] = path;
+        }
+      }
+    }
     emit(state.copyWith(
       config: cfg,
       deviceProfile: device,
       history: rows,
       installedModelIds: installedIds,
+      installedModelPaths: installedPaths,
     ));
   }
 
@@ -308,8 +402,13 @@ class LocalIntelligenceBloc
     Emitter<LocalIntelligenceState> emit,
   ) async {
     final next = state.config.copyWith(wifiOnlyDownload: event.wifiOnly);
+    emit(state.copyWith(
+      config: next,
+      statusMessage: event.wifiOnly
+          ? 'Model downloads restricted to Wi-Fi only.'
+          : 'Model downloads allowed on Wi-Fi and mobile data.',
+    ));
     await database.saveLocalIntelligenceConfig(next);
-    emit(state.copyWith(config: next));
   }
 
   Future<void> _onSetRetention(
@@ -317,12 +416,12 @@ class LocalIntelligenceBloc
     Emitter<LocalIntelligenceState> emit,
   ) async {
     final next = state.config.copyWith(retentionDays: event.days);
-    await database.saveLocalIntelligenceConfig(next);
     emit(state.copyWith(
       config: next,
       statusMessage:
           'History retention updated to ${HistoryRetentionOptions.labelFor(event.days)}.',
     ));
+    await database.saveLocalIntelligenceConfig(next);
   }
 
   Future<void> _onRefreshHistory(
@@ -380,6 +479,184 @@ class LocalIntelligenceBloc
       isBusy: false,
       latestSummary: res,
       statusMessage: res.spokenSummary,
+    ));
+  }
+
+  void _onDownloadProgressUpdated(
+    _ModelDownloadProgressUpdated event,
+    Emitter<LocalIntelligenceState> emit,
+  ) {
+    if (state.downloadingModelId != event.progress.modelId) return;
+    emit(state.copyWith(
+      downloadProgress: event.progress.progress,
+      downloadedBytes: event.progress.downloadedBytes,
+      totalDownloadBytes: event.progress.totalBytes,
+    ));
+  }
+
+  Future<void> _onDownloadAndInstallModel(
+    DownloadAndInstallModel event,
+    Emitter<LocalIntelligenceState> emit,
+  ) async {
+    if (state.downloadingModelId != null) {
+      emit(state.copyWith(
+        statusMessage: 'A model download is already in progress.',
+      ));
+      return;
+    }
+
+    final spec = LocalModelCatalogue.byId(event.modelId);
+    if (spec == null) {
+      emit(state.copyWith(statusMessage: 'Unknown model ID: ${event.modelId}.'));
+      return;
+    }
+
+    final compat = spec.evaluateDevice(state.deviceProfile);
+    if (!compat.isCompatible) {
+      emit(state.copyWith(
+        statusMessage:
+            '${spec.displayName} is not compatible with this device: ${compat.reasons.join(' ')}',
+      ));
+      return;
+    }
+
+    emit(state.copyWith(
+      isBusy: true,
+      downloadingModelId: spec.modelId,
+      downloadProgress: 0.0,
+      downloadedBytes: 0,
+      totalDownloadBytes: spec.packageSizeMb * 1024 * 1024,
+      statusMessage: 'Downloading ${spec.displayName} (~${spec.packageSizeMb} MB)...',
+    ));
+
+    await _progressSub?.cancel();
+    _progressSub = llmEngine.downloadProgressStream.listen(
+      (progress) {
+        if (!isClosed) {
+          add(_ModelDownloadProgressUpdated(progress));
+        }
+      },
+      onError: (_) {},
+    );
+
+    final ModelDownloadResult dl;
+    try {
+      dl = await llmEngine.downloadModel(
+        spec: spec,
+        wifiOnly: state.config.wifiOnlyDownload,
+        authToken: event.authToken,
+      );
+    } finally {
+      await _progressSub?.cancel();
+      _progressSub = null;
+    }
+
+    if (!dl.success || dl.filePath == null || dl.filePath!.isEmpty) {
+      emit(state.copyWith(
+        isBusy: false,
+        clearDownloadingModel: true,
+        statusMessage: dl.cancelled
+            ? 'Download of ${spec.displayName} cancelled.'
+            : 'Download failed for ${spec.displayName}: ${dl.error ?? "Unknown error"}',
+      ));
+      return;
+    }
+
+    emit(state.copyWith(
+      clearDownloadingModel: true,
+      isBusy: true,
+      statusMessage: 'Verifying SHA-256 integrity of ${spec.displayName}...',
+    ));
+
+    final ver = await llmEngine.verifyLocalModelFile(
+      modelId: spec.modelId,
+      filePath: dl.filePath!,
+      expectedSha256: spec.expectedSha256,
+    );
+    if (!ver.verified) {
+      await llmEngine.deleteModelFiles(spec.modelId);
+      emit(state.copyWith(
+        isBusy: false,
+        statusMessage:
+            'Checksum verification failed for ${spec.displayName}: ${ver.error ?? "Corrupted download"}. Removed partial file.',
+      ));
+      return;
+    }
+
+    await database.upsertInstalledLocalModel(
+      modelId: spec.modelId,
+      version: spec.version,
+      localPath: dl.filePath!,
+      sha256: ver.sha256 ?? '',
+      sizeBytes: ver.sizeBytes,
+      status: 'verified',
+    );
+
+    final nextIds = {...state.installedModelIds, spec.modelId};
+    final nextPaths = {...state.installedModelPaths, spec.modelId: dl.filePath!};
+    final refreshedDevice = await llmEngine.probeDevice();
+
+    emit(state.copyWith(
+      installedModelIds: nextIds,
+      installedModelPaths: nextPaths,
+      deviceProfile: refreshedDevice,
+      statusMessage: 'Initializing ${spec.displayName} on-device...',
+    ));
+
+    await llmEngine.unloadModel();
+    final loaded = await llmEngine.initializeModel(
+      modelId: spec.modelId,
+      filePath: dl.filePath!,
+    );
+    final smokeOk = loaded && await llmEngine.runSmokeTest();
+    if (!smokeOk) {
+      await llmEngine.unloadModel();
+      emit(state.copyWith(
+        isBusy: false,
+        statusMessage:
+            '${spec.displayName} downloaded and verified on disk, but could not initialize on this device. Deterministic summaries remain active.',
+      ));
+      return;
+    }
+
+    final nextCfg = state.config.copyWith(activeModelId: spec.modelId);
+    await database.saveLocalIntelligenceConfig(nextCfg);
+
+    emit(state.copyWith(
+      isBusy: false,
+      config: nextCfg,
+      statusMessage: '${spec.displayName} downloaded, verified, and active offline.',
+    ));
+  }
+
+  Future<void> _onCancelModelDownload(
+    CancelModelDownload event,
+    Emitter<LocalIntelligenceState> emit,
+  ) async {
+    await llmEngine.cancelDownload();
+    emit(state.copyWith(
+      isBusy: false,
+      clearDownloadingModel: true,
+      statusMessage: 'Model download cancelled.',
+    ));
+  }
+
+  Future<void> _onActivateInstalledModel(
+    ActivateInstalledModel event,
+    Emitter<LocalIntelligenceState> emit,
+  ) async {
+    final filePath = state.installedModelPaths[event.modelId];
+    if (filePath == null || filePath.isEmpty) {
+      emit(state.copyWith(
+        statusMessage: 'Model file path not found for ${event.modelId}. Please re-download.',
+      ));
+      return;
+    }
+    final spec = LocalModelCatalogue.byId(event.modelId);
+    add(VerifyAndActivateModel(
+      modelId: event.modelId,
+      filePath: filePath,
+      expectedSha256: spec?.expectedSha256,
     ));
   }
 
@@ -447,10 +724,12 @@ class LocalIntelligenceBloc
     await database.saveLocalIntelligenceConfig(nextCfg);
 
     final nextIds = {...state.installedModelIds, spec.modelId};
+    final nextPaths = {...state.installedModelPaths, spec.modelId: event.filePath};
     emit(state.copyWith(
       isBusy: false,
       config: nextCfg,
       installedModelIds: nextIds,
+      installedModelPaths: nextPaths,
       statusMessage: '${spec.displayName} verified and active offline.',
     ));
   }
@@ -462,13 +741,17 @@ class LocalIntelligenceBloc
     await llmEngine.deleteModelFiles(event.modelId);
     await database.deleteInstalledLocalModel(event.modelId);
     final nextIds = Set<String>.from(state.installedModelIds)..remove(event.modelId);
+    final nextPaths = Map<String, String>.from(state.installedModelPaths)..remove(event.modelId);
     final nextCfg = state.config.activeModelId == event.modelId
         ? state.config.copyWith(clearActiveModel: true)
         : state.config;
     await database.saveLocalIntelligenceConfig(nextCfg);
+    final refreshedDevice = await llmEngine.probeDevice();
     emit(state.copyWith(
       config: nextCfg,
+      deviceProfile: refreshedDevice,
       installedModelIds: nextIds,
+      installedModelPaths: nextPaths,
       statusMessage:
           'Deleted model ${event.modelId}. Your local operation history remains intact.',
     ));
@@ -492,6 +775,7 @@ class LocalIntelligenceBloc
     ResetLocalIntelligenceRequested event,
     Emitter<LocalIntelligenceState> emit,
   ) async {
+    await llmEngine.cancelDownload();
     for (final id in state.installedModelIds) {
       await llmEngine.deleteModelFiles(id);
       await database.deleteInstalledLocalModel(id);
@@ -501,10 +785,14 @@ class LocalIntelligenceBloc
     summaryOrchestrator.resetSessionContext();
     const fresh = LocalIntelligenceConfig();
     await database.saveLocalIntelligenceConfig(fresh);
+    final refreshedDevice = await llmEngine.probeDevice();
     emit(state.copyWith(
       config: fresh,
+      deviceProfile: refreshedDevice,
       history: const [],
       installedModelIds: const {},
+      installedModelPaths: const {},
+      clearDownloadingModel: true,
       clearSummary: true,
       statusMessage:
           'Local Intelligence reset: disabled, models removed, and operation history cleared.',

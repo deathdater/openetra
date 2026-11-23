@@ -15,9 +15,51 @@ class ModelVerificationResult {
   final String? error;
 }
 
+class ModelDownloadResult {
+  const ModelDownloadResult({
+    required this.success,
+    this.filePath,
+    this.sizeBytes = 0,
+    this.cancelled = false,
+    this.error,
+  });
+
+  final bool success;
+  final String? filePath;
+  final int sizeBytes;
+  final bool cancelled;
+  final String? error;
+}
+
+class ModelDownloadProgress {
+  const ModelDownloadProgress({
+    required this.modelId,
+    required this.downloadedBytes,
+    required this.totalBytes,
+    required this.progress,
+    required this.status,
+  });
+
+  final String modelId;
+  final int downloadedBytes;
+  final int totalBytes;
+  final double progress;
+  final String status;
+}
+
 /// Replaceable on-device LLM inference and model-file bridge contract.
 abstract class LocalLlmEngine {
   Future<DeviceHardwareProfile> probeDevice();
+
+  Stream<ModelDownloadProgress> get downloadProgressStream;
+
+  Future<ModelDownloadResult> downloadModel({
+    required LocalModelSpec spec,
+    required bool wifiOnly,
+    String? authToken,
+  });
+
+  Future<void> cancelDownload();
 
   Future<ModelVerificationResult> verifyLocalModelFile({
     required String modelId,
@@ -47,18 +89,45 @@ abstract class LocalLlmEngine {
 }
 
 /// Native Android Kotlin bridge (`com.openetra.app/local_intelligence`) for
-/// hardware probing, SHA-256 package verification, file lifecycle, and
-/// LiteRT-LM inference. Fails safely to null/false on unsupported hosts.
+/// hardware probing, resumable HTTPS download, SHA-256 package verification,
+/// file lifecycle, and LiteRT-LM inference. Fails safely on unsupported hosts.
 class NativeLocalLlmEngine implements LocalLlmEngine {
-  NativeLocalLlmEngine([MethodChannel? channel])
-      : _channel =
-            channel ?? const MethodChannel('com.openetra.app/local_intelligence');
+  NativeLocalLlmEngine([
+    MethodChannel? channel,
+    EventChannel? progressChannel,
+  ])  : _channel =
+            channel ?? const MethodChannel('com.openetra.app/local_intelligence'),
+        _progressChannel = progressChannel ??
+            const EventChannel(
+              'com.openetra.app/local_intelligence_download_progress',
+            );
 
   final MethodChannel _channel;
+  final EventChannel _progressChannel;
   String? _loadedModelId;
+  Stream<ModelDownloadProgress>? _cachedProgressStream;
 
   @override
   String? get loadedModelId => _loadedModelId;
+
+  @override
+  Stream<ModelDownloadProgress> get downloadProgressStream {
+    _cachedProgressStream ??= _progressChannel
+        .receiveBroadcastStream()
+        .where((event) => event is Map)
+        .map((raw) {
+          final map = Map<String, dynamic>.from(raw as Map);
+          return ModelDownloadProgress(
+            modelId: map['modelId']?.toString() ?? '',
+            downloadedBytes: (map['downloadedBytes'] as num?)?.toInt() ?? 0,
+            totalBytes: (map['totalBytes'] as num?)?.toInt() ?? 0,
+            progress: (map['progress'] as num?)?.toDouble() ?? 0.0,
+            status: map['status']?.toString() ?? 'downloading',
+          );
+        })
+        .handleError((_) {});
+    return _cachedProgressStream!;
+  }
 
   @override
   Future<DeviceHardwareProfile> probeDevice() async {
@@ -81,6 +150,54 @@ class NativeLocalLlmEngine implements LocalLlmEngine {
     } catch (_) {
       return DeviceHardwareProfile.unknown;
     }
+  }
+
+  @override
+  Future<ModelDownloadResult> downloadModel({
+    required LocalModelSpec spec,
+    required bool wifiOnly,
+    String? authToken,
+  }) async {
+    try {
+      final res = await _channel.invokeMapMethod<String, dynamic>(
+        'downloadModel',
+        {
+          'modelId': spec.modelId,
+          'downloadUrl': spec.downloadUrl,
+          'fileName': spec.fileName,
+          'expectedSizeMb': spec.packageSizeMb,
+          'wifiOnly': wifiOnly,
+          'authToken': authToken,
+        },
+      );
+      if (res == null) {
+        return const ModelDownloadResult(
+          success: false,
+          error: 'Native model downloader returned an empty response.',
+        );
+      }
+      return ModelDownloadResult(
+        success: res['success'] == true,
+        filePath: res['filePath'] as String?,
+        sizeBytes: (res['sizeBytes'] as num?)?.toInt() ?? 0,
+        cancelled: res['cancelled'] == true,
+        error: res['error'] as String?,
+      );
+    } on MissingPluginException {
+      return const ModelDownloadResult(
+        success: false,
+        error: 'Model downloading is only available on Android devices.',
+      );
+    } catch (e) {
+      return ModelDownloadResult(success: false, error: e.toString());
+    }
+  }
+
+  @override
+  Future<void> cancelDownload() async {
+    try {
+      await _channel.invokeMethod<void>('cancelDownload');
+    } catch (_) {}
   }
 
   @override

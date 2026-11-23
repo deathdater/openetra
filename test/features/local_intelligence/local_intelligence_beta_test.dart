@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,18 +27,58 @@ class _FakeLocalLlmEngine implements LocalLlmEngine {
   );
   bool shouldPassVerification = true;
   bool shouldPassSmokeTest = true;
+  bool shouldPassDownload = true;
   String? fakeSummaryResponse =
       'Earlier today you completed 2 recorded activities: 1 scene description and 1 text reading.';
   String? _loaded;
   int generateCallCount = 0;
   int unloadCallCount = 0;
+  int downloadCallCount = 0;
+  bool lastWifiOnlyArg = true;
   final List<String> deletedModels = [];
+  final StreamController<ModelDownloadProgress> _progressController =
+      StreamController<ModelDownloadProgress>.broadcast();
 
   @override
   String? get loadedModelId => _loaded;
 
   @override
+  Stream<ModelDownloadProgress> get downloadProgressStream =>
+      _progressController.stream;
+
+  @override
   Future<DeviceHardwareProfile> probeDevice() async => device;
+
+  @override
+  Future<ModelDownloadResult> downloadModel({
+    required LocalModelSpec spec,
+    required bool wifiOnly,
+    String? authToken,
+  }) async {
+    downloadCallCount++;
+    lastWifiOnlyArg = wifiOnly;
+    _progressController.add(ModelDownloadProgress(
+      modelId: spec.modelId,
+      downloadedBytes: 150 * 1024 * 1024,
+      totalBytes: spec.packageSizeMb * 1024 * 1024,
+      progress: 0.5,
+      status: 'downloading',
+    ));
+    if (!shouldPassDownload) {
+      return const ModelDownloadResult(
+        success: false,
+        error: 'Wi-Fi only download is enabled.',
+      );
+    }
+    return ModelDownloadResult(
+      success: true,
+      filePath: '/tmp/${spec.modelId}__${spec.fileName}',
+      sizeBytes: spec.packageSizeMb * 1024 * 1024,
+    );
+  }
+
+  @override
+  Future<void> cancelDownload() async {}
 
   @override
   Future<ModelVerificationResult> verifyLocalModelFile({
@@ -337,11 +378,17 @@ void main() {
 
     await tester.scrollUntilVisible(find.text('Qwen3-0.6B (Compact)'), 300);
     expect(find.text('Qwen3-0.6B (Compact)'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Download (~328 MB)'), 300);
+    expect(find.text('Download (~328 MB)'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Open Local Activity History & Summaries'),
       -300,
     );
+    await tester.ensureVisible(
+      find.text('Open Local Activity History & Summaries'),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Open Local Activity History & Summaries'));
     await tester.pumpAndSettle();
     expect(find.byType(ActivityHistoryScreen), findsOneWidget);
@@ -356,5 +403,41 @@ void main() {
       await bloc.close();
       await db.close();
     });
+  });
+
+  test('DownloadAndInstallModel downloads, verifies, persists, and activates model respecting Wi-Fi-only toggle', () async {
+    final db = await OpenetraDatabase.open(
+      factory: databaseFactoryFfi,
+      dbPath: inMemoryDatabasePath,
+    );
+    final fakeLlm = _FakeLocalLlmEngine();
+    final bloc = LocalIntelligenceBloc(
+      database: db,
+      llmEngine: fakeLlm,
+      summaryOrchestrator: SummaryOrchestrator(
+        database: db,
+        llmEngine: fakeLlm,
+      ),
+    );
+
+    bloc.add(const LoadLocalIntelligence());
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(bloc.state.config.wifiOnlyDownload, isTrue);
+
+    bloc.add(const SetWifiOnlyDownload(false));
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(bloc.state.config.wifiOnlyDownload, isFalse);
+
+    bloc.add(const DownloadAndInstallModel(modelId: 'qwen3-0.6b-q4'));
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+
+    expect(fakeLlm.downloadCallCount, 1);
+    expect(fakeLlm.lastWifiOnlyArg, isFalse);
+    expect(bloc.state.installedModelIds, contains('qwen3-0.6b-q4'));
+    expect(bloc.state.config.activeModelId, 'qwen3-0.6b-q4');
+    expect(bloc.state.downloadingModelId, isNull);
+
+    await bloc.close();
+    await db.close();
   });
 }

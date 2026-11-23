@@ -18,6 +18,77 @@ class LocalIntelligenceSettingsScreen extends StatelessWidget {
 
   final ValueChanged<String>? onSpeakText;
 
+  Future<void> _startModelDownload(
+    BuildContext context,
+    LocalModelSpec spec,
+  ) async {
+    final bloc = context.read<LocalIntelligenceBloc>();
+    if (!spec.requiresLicenceAcceptance && !spec.requiresAuthToken) {
+      bloc.add(DownloadAndInstallModel(modelId: spec.modelId));
+      return;
+    }
+
+    final tokenController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Download ${spec.displayName}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Licence: ${spec.licence}. Package size: ~${spec.packageSizeMb} MB.',
+                ),
+                const SizedBox(height: OpenetraSpacing.sm),
+                if (spec.requiresAuthToken) ...[
+                  const Text(
+                    'This model is gated on Hugging Face. Accept the licence on huggingface.co and paste a read-only Hugging Face access token below (used only for this download and never saved).',
+                  ),
+                  const SizedBox(height: OpenetraSpacing.md),
+                  TextField(
+                    controller: tokenController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Hugging Face Access Token (hf_...)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Confirm & Download'),
+            ),
+          ],
+        );
+      },
+    );
+
+    final token = tokenController.text.trim();
+    tokenController.dispose();
+    if (confirmed == true) {
+      bloc.add(DownloadAndInstallModel(
+        modelId: spec.modelId,
+        authToken: token.isEmpty ? null : token,
+      ));
+    }
+  }
+
+  String _formatMb(int bytes) {
+    if (bytes <= 0) return '0 MB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = OpenetraTheme.paletteOf(context);
@@ -94,6 +165,20 @@ class LocalIntelligenceSettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: OpenetraSpacing.md),
               AccessibleActionTile(
+                title: cfg.wifiOnlyDownload
+                    ? 'Model Downloads: Wi-Fi Only'
+                    : 'Model Downloads: Wi-Fi & Mobile Data',
+                subtitle:
+                    'Controls whether optional model packages can download over cellular data',
+                semanticHint: 'Double tap to toggle Wi-Fi only model downloads',
+                icon: Icons.wifi_outlined,
+                filledAccent: cfg.wifiOnlyDownload,
+                onPressed: () => context
+                    .read<LocalIntelligenceBloc>()
+                    .add(SetWifiOnlyDownload(!cfg.wifiOnlyDownload)),
+              ),
+              const SizedBox(height: OpenetraSpacing.md),
+              AccessibleActionTile(
                 title: 'Open Local Activity History & Summaries',
                 subtitle:
                     '${state.history.length} recorded entries • Works with or without a downloaded LLM',
@@ -133,7 +218,7 @@ class LocalIntelligenceSettingsScreen extends StatelessWidget {
               const SizedBox(height: OpenetraSpacing.xl),
               const OpenetraSectionHeader(
                 title: 'Verified On-Device Model Catalogue',
-                subtitle: 'Optional LiteRT-LM (.litertlm) packages — never bundled in APK',
+                subtitle: 'Optional LiteRT-LM (.litertlm) packages — downloaded on demand',
               ),
               OpenetraCard(
                 child: Column(
@@ -166,10 +251,17 @@ class LocalIntelligenceSettingsScreen extends StatelessWidget {
                     final compat = spec.evaluateDevice(dev);
                     final installed = state.installedModelIds.contains(spec.modelId);
                     final isActive = cfg.activeModelId == spec.modelId;
+                    final isDownloading = state.downloadingModelId == spec.modelId;
+                    final anotherDownloading =
+                        state.downloadingModelId != null && !isDownloading;
+                    final pct = (state.downloadProgress * 100).clamp(0, 100).round();
+
                     return OpenetraCard(
                       borderColor: isActive
                           ? palette.secondary
-                          : (compat.isCompatible ? palette.border : palette.warning),
+                          : (isDownloading
+                              ? palette.primary
+                              : (compat.isCompatible ? palette.border : palette.warning)),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -181,21 +273,27 @@ class LocalIntelligenceSettingsScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: OpenetraSpacing.sm),
                           OpenetraStatusBadge(
-                            label: isActive
-                                ? 'Active & Verified'
-                                : (installed
-                                    ? 'Installed & Verified'
-                                    : (compat.isCompatible
-                                        ? 'Compatible — Not Installed'
-                                        : 'Incompatible on this device')),
-                            icon: isActive
-                                ? Icons.check_circle_outline
-                                : Icons.download_for_offline_outlined,
+                            label: isDownloading
+                                ? 'Downloading ($pct%)'
+                                : (isActive
+                                    ? 'Active & Verified'
+                                    : (installed
+                                        ? 'Installed & Verified'
+                                        : (compat.isCompatible
+                                            ? 'Compatible — Ready to Download'
+                                            : 'Incompatible on this device'))),
+                            icon: isDownloading
+                                ? Icons.downloading_outlined
+                                : (isActive
+                                    ? Icons.check_circle_outline
+                                    : Icons.download_for_offline_outlined),
                             tone: isActive
                                 ? OpenetraBadgeTone.success
-                                : (compat.isCompatible
-                                    ? OpenetraBadgeTone.neutral
-                                    : OpenetraBadgeTone.warning),
+                                : (isDownloading
+                                    ? OpenetraBadgeTone.info
+                                    : (compat.isCompatible
+                                        ? OpenetraBadgeTone.neutral
+                                        : OpenetraBadgeTone.warning)),
                           ),
                           if (!compat.isCompatible) ...[
                             const SizedBox(height: OpenetraSpacing.xs),
@@ -204,20 +302,69 @@ class LocalIntelligenceSettingsScreen extends StatelessWidget {
                               style: textTheme.bodySmall?.copyWith(color: palette.warning),
                             ),
                           ],
-                          if (installed) ...[
+                          if (isDownloading) ...[
+                            const SizedBox(height: OpenetraSpacing.md),
+                            LinearProgressIndicator(
+                              value: state.downloadProgress > 0
+                                  ? state.downloadProgress
+                                  : null,
+                            ),
+                            const SizedBox(height: OpenetraSpacing.xs),
+                            Text(
+                              '${_formatMb(state.downloadedBytes)} / ${_formatMb(state.totalDownloadBytes)} ($pct%)',
+                              style: textTheme.bodySmall,
+                            ),
                             const SizedBox(height: OpenetraSpacing.sm),
                             Align(
                               alignment: Alignment.centerRight,
-                              child: TextButton.icon(
+                              child: OutlinedButton.icon(
                                 onPressed: () => context
                                     .read<LocalIntelligenceBloc>()
-                                    .add(DeleteDownloadedModel(spec.modelId)),
-                                icon: Icon(Icons.delete_outline, color: palette.error),
-                                label: Text(
-                                  'Delete Model Only',
-                                  style: TextStyle(color: palette.error),
-                                ),
+                                    .add(const CancelModelDownload()),
+                                icon: const Icon(Icons.close),
+                                label: const Text('Cancel Download'),
                               ),
+                            ),
+                          ] else if (!installed && compat.isCompatible) ...[
+                            const SizedBox(height: OpenetraSpacing.md),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: FilledButton.icon(
+                                onPressed: (anotherDownloading || state.isBusy)
+                                    ? null
+                                    : () => _startModelDownload(context, spec),
+                                icon: const Icon(Icons.download_outlined),
+                                label: Text('Download (~${spec.packageSizeMb} MB)'),
+                              ),
+                            ),
+                          ] else if (installed) ...[
+                            const SizedBox(height: OpenetraSpacing.sm),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                if (!isActive)
+                                  TextButton.icon(
+                                    onPressed: state.isBusy
+                                        ? null
+                                        : () => context
+                                            .read<LocalIntelligenceBloc>()
+                                            .add(ActivateInstalledModel(spec.modelId)),
+                                    icon: const Icon(Icons.play_arrow_outlined),
+                                    label: const Text('Use This Model'),
+                                  ),
+                                TextButton.icon(
+                                  onPressed: state.isBusy
+                                      ? null
+                                      : () => context
+                                          .read<LocalIntelligenceBloc>()
+                                          .add(DeleteDownloadedModel(spec.modelId)),
+                                  icon: Icon(Icons.delete_outline, color: palette.error),
+                                  label: Text(
+                                    'Delete Model Only',
+                                    style: TextStyle(color: palette.error),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ],

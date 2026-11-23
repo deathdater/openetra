@@ -102,6 +102,9 @@ dependencies {
     implementation "com.google.mlkit:barcode-scanning:17.3.0"
     implementation "com.google.ai.edge.litert:litert:1.4.2"
 
+    // Local Intelligence Beta: Optional on-device LiteRT-LM runtime
+    implementation "com.google.ai.edge.litertlm:litertlm-android:0.19.1"
+
     androidTestImplementation "androidx.test:runner:1.6.1"
     androidTestImplementation "androidx.test:rules:1.6.1"
     androidTestImplementation "androidx.test.ext:junit:1.2.1"

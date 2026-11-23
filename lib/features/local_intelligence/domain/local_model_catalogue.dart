@@ -73,6 +73,10 @@ class LocalModelSpec extends Equatable {
     required this.requiresLicenceAcceptance,
     required this.supportedLanguages,
     required this.expectedFileExtension,
+    required this.fileName,
+    required this.downloadUrl,
+    this.expectedSha256,
+    this.requiresAuthToken = false,
   });
 
   final String modelId;
@@ -88,6 +92,10 @@ class LocalModelSpec extends Equatable {
   final bool requiresLicenceAcceptance;
   final List<String> supportedLanguages;
   final String expectedFileExtension;
+  final String fileName;
+  final String downloadUrl;
+  final String? expectedSha256;
+  final bool requiresAuthToken;
 
   ModelCompatibilityResult evaluateDevice(DeviceHardwareProfile device) {
     final reasons = <String>[];
@@ -102,7 +110,7 @@ class LocalModelSpec extends Equatable {
     if (device.totalRamMb > 0 && device.totalRamMb < minRamMb) {
       reasons.add('Requires at least ${(minRamMb / 1024).toStringAsFixed(1)} GB RAM (device has ${(device.totalRamMb / 1024).toStringAsFixed(1)} GB).');
     }
-    final requiredFreeMb = (packageSizeMb * 1.4).round();
+    final requiredFreeMb = (packageSizeMb * 1.25).round();
     if (device.availableStorageMb > 0 &&
         device.availableStorageMb < requiredFreeMb) {
       reasons.add('Needs ~$requiredFreeMb MB free storage (${device.availableStorageMb} MB available).');
@@ -128,6 +136,10 @@ class LocalModelSpec extends Equatable {
         requiresLicenceAcceptance,
         supportedLanguages,
         expectedFileExtension,
+        fileName,
+        downloadUrl,
+        expectedSha256,
+        requiresAuthToken,
       ];
 }
 
@@ -139,9 +151,9 @@ class LocalModelCatalogue {
     LocalModelSpec(
       modelId: 'qwen3-0.6b-q4',
       displayName: 'Qwen3-0.6B (Compact)',
-      version: '1.0.0',
-      quantization: 'INT4 (.litertlm)',
-      packageSizeMb: 450,
+      version: '2026.10.31',
+      quantization: 'Dynamic INT4 (.litertlm)',
+      packageSizeMb: 328,
       runtimeName: 'LiteRT-LM',
       minRamMb: 3072,
       minAndroidApi: 26,
@@ -150,13 +162,18 @@ class LocalModelCatalogue {
       requiresLicenceAcceptance: false,
       supportedLanguages: ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'kn', 'ml'],
       expectedFileExtension: '.litertlm',
+      fileName: 'Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm',
+      downloadUrl:
+          'https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm',
+      expectedSha256:
+          'bf1aba9ce8d963124407353c6aa4cbf72eba78db21ae133de983eac672ce83e0',
     ),
     LocalModelSpec(
       modelId: 'qwen3-1.7b-q4',
       displayName: 'Qwen3-1.7B (Balanced)',
-      version: '1.0.0',
-      quantization: 'INT4 (.litertlm)',
-      packageSizeMb: 1024,
+      version: '2026.10.31',
+      quantization: 'Dynamic INT4 (.litertlm)',
+      packageSizeMb: 932,
       runtimeName: 'LiteRT-LM',
       minRamMb: 4096,
       minAndroidApi: 26,
@@ -165,13 +182,18 @@ class LocalModelCatalogue {
       requiresLicenceAcceptance: false,
       supportedLanguages: ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'kn', 'ml'],
       expectedFileExtension: '.litertlm',
+      fileName: 'Qwen3-1.7B_dynamic_wi4b32_afp32.litertlm',
+      downloadUrl:
+          'https://huggingface.co/litert-community/Qwen3-1.7B/resolve/main/Qwen3-1.7B_dynamic_wi4b32_afp32.litertlm',
+      expectedSha256:
+          '2a72330b504a6596d53a2c00923c57173b10f1b83e6a541213ffec08d1fc5de8',
     ),
     LocalModelSpec(
       modelId: 'gemma-3n-e2b-it-q4',
       displayName: 'Gemma 3n E2B-IT (High-RAM)',
       version: '1.0.0',
       quantization: 'INT4 (.litertlm)',
-      packageSizeMb: 2150,
+      packageSizeMb: 3486,
       runtimeName: 'LiteRT-LM',
       minRamMb: 6144,
       minAndroidApi: 29,
@@ -180,6 +202,10 @@ class LocalModelCatalogue {
       requiresLicenceAcceptance: true,
       supportedLanguages: ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'kn', 'ml'],
       expectedFileExtension: '.litertlm',
+      fileName: 'gemma-3n-E2B-it-int4.litertlm',
+      downloadUrl:
+          'https://huggingface.co/google/gemma-3n-E2B-it-litert-lm/resolve/main/gemma-3n-E2B-it-int4.litertlm',
+      requiresAuthToken: true,
     ),
   ];
 

@@ -18,3 +18,7 @@
 -keep class com.google.mlkit.** { *; }
 -dontwarn com.google.mlkit.**
 -dontwarn org.tensorflow.lite.**
+
+# Keep Google AI Edge LiteRT-LM runtime (optional Local Intelligence Beta)
+-keep class com.google.ai.edge.litertlm.** { *; }
+-dontwarn com.google.ai.edge.litertlm.**
