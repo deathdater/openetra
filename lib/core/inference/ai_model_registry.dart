@@ -202,7 +202,7 @@ class AIModelRegistry {
     ),
     const ModelMetadata(
       modelId: 'inr-currency-mobilenetv3-int8',
-      displayName: 'INR Note Classifier (LiteRT 2.4.0 Slot)',
+      displayName: 'INR Note Classifier (LiteRT 1.4.2 Slot)',
       version: 'pack-slot-phase6',
       supportedTasks: [ModelTask.currencyClassification],
       languages: ['en', 'hi', 'kn'],

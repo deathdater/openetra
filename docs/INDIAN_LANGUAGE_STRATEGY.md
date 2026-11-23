@@ -26,3 +26,10 @@
 - **Meta MMS VITS (`vits-mms-*`):** Licensed `CC-BY-NC 4.0` (non-commercial) — **explicitly excluded** from production shipping packages.
 - **Piper TTS Voices (`piper-voices`):** Although the `piper-voices` repository carries an MIT marker for tooling/metadata, individual voice `.onnx` checkpoints (such as `hi_IN-rohan` or `hi_IN-pratham`) inherit upstream dataset licences (e.g., IIT Madras IndicTTS). Each candidate voice's per-folder `MODEL_CARD` must be audited before bundling.
 - **Translation Policy:** Never force multi-stage translation for hazard warnings or basic descriptions. Safety alerts and core UI confirmations are authored natively in English, Hindi, and Kannada and spoken directly in the selected offline language.
+
+---
+
+## 3. Verified Phase 5–6 Implementation (`v0.9.0`)
+- **Direct Native Trilingual Localization:** `OpenetraLocalizer` authors English (`en-IN`), Hindi (`hi-IN`), and Kannada (`kn-IN`) phrases natively across `SceneUnderstandingEngine`, `HazardIntelligenceEngine`, `SafetySpeechGuard`, `CurrencyRecognitionService`, `OpenetraCoordinator`, and `HomeScreen`.
+- **Bundled Indic OCR (`arm64-v8a` & `armeabi-v7a`):** Verified offline execution on `Medium_Phone_API_35` Android 15 emulator with ML Kit Devanagari `16.0.1` (`208 ms`, `"नमस्ते निकास 500"`), Tesseract `4.9.0` `hin.traineddata` (`27 ms`, `"नमस्ते निकास 500"`), and `kan.traineddata` (`14 ms`, `"ಬೆಂಗಳೂರು 500"`).
+- **Offline Speech Boundary & Pluggable ASR:** Bundled `sherpa-onnx 2.0.3` + `silero_vad.int8.onnx` (`14 ms` verified on `Medium_Phone_API_35`), `OfflineRecognizer` (`OfflineNemoEncDecCtcModelConfig`) for SHA-256-verified external `IndicConformer` packs (`loadAsrPack`), and Android OS `SpeechRecognizer.isOnDeviceRecognitionAvailable` fallback check. On-device `IndicConformer` pack benchmarking and physical device Indian-speaker ASR trials remain pending pack provisioning and Phase 7–8 field testing.

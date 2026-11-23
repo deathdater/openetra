@@ -1,5 +1,13 @@
 # Openetra Context Changelog
 
+## [0.9.0-phase5-7-verified] - 2026-11-23
+### Added & Verified
+- Pinned `com.google.ai.edge.litert:litert:1.4.2` (16 KB aligned, resolving `litert-api:2.4.0` Kotlin metadata `2.4.0` conflict against Kotlin `2.2.20` + AGP `8.5.2`).
+- Guarded `FlutterLoader.getLookupKeyForAsset` lookups in `IndicOcrPlugin.kt` and `OfflineSpeechPlugin.kt` for standalone Android instrumentation tests.
+- Authored 4 new host test suites (`openetra_localizer_test.dart`, `shopping_and_migration_test.dart`, `embeddings_and_currency_fusion_test.dart`, `native_indic_providers_test.dart`), bringing host tests to 36/36 passing.
+- Authored `IndicAndSpecialistInstrumentedTest.kt` and verified live execution on `Medium_Phone_API_35` (`arm64-v8a`, Android 15): ML Kit Devanagari (`208 ms`), Tesseract `hin` (`27 ms`) & `kan` (`14 ms`), `sherpa-onnx` Silero VAD (`14 ms`), ML Kit Barcode `17.3.0` (`42 ms`), Mirage `form` (`120.65 ms`), and 96-dim crop embeddings (`18.53 ms`) alongside `MirageNativeInstrumentedTest` (`1.302 s`).
+- Recorded observed Android 15 ARM64 emulator metrics across `docs/` and verified bundle `.so` / asset inventory without `INTERNET` in production `AndroidManifest.xml`.
+
 ## [0.8.0-phase6-specialist-and-shopping] - 2026-11-23
 ### Added
 - Upgraded `OpenetraDatabase` to schema v2 (`local_products` table + `onUpgrade` migration + 5 seeded Indian EAN-890 sample items + `getObjectEmbeddings`, `lookupLocalProduct`, `upsertLocalProduct`, `listLocalProducts`).

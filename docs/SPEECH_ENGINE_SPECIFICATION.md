@@ -23,3 +23,11 @@
 ## 3. Echo & Self-Trigger Prevention
 - `SpeechController` maintains an atomic `isAssistantSpeaking` lock shared with `AudioBloc`.
 - While TTS is active (plus a `350 ms` acoustic tail guard), microphone ASR listening is paused/muted so assistant speech never triggers recursive commands.
+
+---
+
+## 4. Implemented Native Bridge & Emulator Verification (`OfflineSpeechPlugin`)
+- **Channel & Native Runtime:** `OfflineSpeechPlugin` (`com.openetra.app/speech`) bundles `sherpa-onnx-static-link-onnxruntime-2.0.3.aar` (`libsherpa-onnx-jni.so`, SHA-256 `7744a3a8...`) and `assets/models/vad/silero_vad.int8.onnx` (SHA-256 `c36d490aff5ab924ca6c7aeec4d8f6bd3d22db6fa17611b9c5b17eae58ac3a20`).
+- **Verified Emulator Execution (`Medium_Phone_API_35`, Android 15 ARM64):** `OfflineSpeechPlugin.provisionSileroVad` + `createVad` + `runVadOnSamples` executed on 32,000 mono `16 kHz` float samples (`1.0 s` silence + `1.0 s` modulated test signal) in `14 ms` (`speechDetected=true`, `segmentCount=1`).
+- **Pluggable External ASR Packs:** `loadAsrPack` verifies SHA-256 digests before constructing `com.k2fsa.sherpa.onnx.OfflineRecognizer` (`OfflineNemoEncDecCtcModelConfig`). When no Conformer pack is installed locally, `status` reports `osOnDeviceSpeechAvailable` via `SpeechRecognizer.isOnDeviceRecognitionAvailable` (API 31+) and surfaces `OfflineVoiceUnavailableFailure` cleanly rather than making cloud calls.
+- **Echo-Safe UI Trigger:** `HomeScreen` offline microphone control rejects capture with `OpenetraLocalizer.micGatedNotice` when `AudioBloc` reports `isSpeaking == true`.

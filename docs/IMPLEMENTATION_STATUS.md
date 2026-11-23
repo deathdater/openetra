@@ -1,6 +1,6 @@
 # Openetra Implementation Status
 
-**Current Version:** `0.8.0-phase6-specialist-and-shopping`  
+**Current Version:** `0.9.0-phase5-7-verified`  
 **Last Updated:** 2026-11-23
 
 | Area / Phase | Status | Notes |
@@ -11,6 +11,6 @@
 | **Phase 3: Scene Understanding Engine & Contextual QA** | **Completed (`v0.4.0`)** | `SceneUnderstandingEngine` & `ContextualQueryResolver` wired into `SceneUnderstandingBloc` (Workflow A). |
 | **Phase 4: Hazard Intelligence, Safety Guard & Workflows B–E** | **Completed (`v0.5.0`)** | `HazardIntelligenceEngine` + `IoUTracker`, `SafetySpeechGuard`, `ScriptDetector`/`OcrRouter`, plus Currency & Object Memory workflows wired end-to-end. |
 | **Vertical Slice Validation (`v0.6.0`)** | **Completed (`v0.6.0`)** | `flutter analyze` clean; 24/24 host tests passing; `app-debug.apk` built (`android-arm64`); `MirageNativeInstrumentedTest` & cold app launch passed on `Medium_Phone_API_35` ARM64 emulator. |
-| **Phase 5: Indic OCR (ML Kit Devanagari + Tesseract) & `sherpa-onnx` VAD/ASR** | **Completed (`v0.7.0`)** | Bundled `hin.traineddata`, `kan.traineddata`, ML Kit Devanagari `16.0.1`, `silero_vad.int8.onnx` (`sherpa-onnx 2.0.3`), `OpenetraLocalizer` (EN/HI/KN); `IndicConformer` packs verified & slot-ready. |
-| **Phase 6: Indian Currency Fusion, Barcodes, Object Embeddings & Shopping** | **Implemented (`v0.8.0`); Classifier Training Pending** | SQLite v2 `local_products` (5 seeded EAN-890 items), ML Kit `17.3.0` barcode scanner, 96-dim crop embeddings in `ObjectMemoryBloc`, `SpecialistVisionPlugin` LiteRT `2.4.0` runtime slot, Mirage `form` + OCR currency fusion, and `ShoppingScreen` implemented; dedicated banknote `.tflite` weights & monocular depth pack pending dataset training/evaluation. |
-| **Phase 7–8: Physical Device Benchmarks & Blind-User Trials** | **Planned** | Emulator ARM64 verification completed in `v0.6.0`; physical devices & blind-user field validation in Phase 7–8. |
+| **Phase 5: Indic OCR (ML Kit Devanagari + Tesseract) & `sherpa-onnx` VAD/ASR** | **Completed & Emulator-Verified (`v0.9.0`)** | Bundled `hin.traineddata`, `kan.traineddata`, ML Kit Devanagari `16.0.1`, `silero_vad.int8.onnx` (`sherpa-onnx 2.0.3`), `OpenetraLocalizer` (EN/HI/KN); live Android 15 ARM64 verification passed; external `IndicConformer` packs ready via SHA-256 `loadAsrPack`. |
+| **Phase 6: Currency Fusion, Barcodes, Embeddings, LiteRT & Shopping** | **Implemented & Emulator-Verified (`v0.9.0`); Banknote Weights Pending** | SQLite v2 `local_products` (5 seeded EAN-890 staples, v1->v2 migration tested), ML Kit `17.3.0` barcode (`42 ms`), 96-dim visual crop embeddings (`18.53 ms`), Mirage `form` (`120.65 ms`) + OCR currency fusion, `ShoppingScreen`, and LiteRT `1.4.2` (`libtensorflowlite_jni.so`) slot active; trained `.tflite` banknote & depth weights pending training/evaluation. |
+| **Phase 7–8: Physical Device Benchmarks & Blind-User Trials** | **Emulator Baseline Verified (`v0.9.0`); Physical Devices Pending** | 36 host unit/widget tests + `MirageNativeInstrumentedTest` (`1.302 s`) + `IndicAndSpecialistInstrumentedTest` (`0.822 s`) passing on `Medium_Phone_API_35`; real battery/thermal/NPU physical Android phone & blind-user field validation remain pending. |

@@ -73,7 +73,9 @@ class IndicOcrPlugin(
                 }
             }
 
-            val lookupKey = FlutterInjector.instance().flutterLoader().getLookupKeyForAsset(assetPath)
+            val lookupKey = runCatching {
+                FlutterInjector.instance().flutterLoader().getLookupKeyForAsset(assetPath)
+            }.getOrElse { "flutter_assets/$assetPath" }
             val tmpFile = File(tessDataDir, "$langCode.traineddata.tmp")
             val digest = MessageDigest.getInstance("SHA-256")
             val buf = ByteArray(64 * 1024)

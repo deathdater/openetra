@@ -97,7 +97,7 @@ dependencies {
 
     // Phase 6: Offline Barcode & LiteRT
     implementation "com.google.mlkit:barcode-scanning:17.3.0"
-    implementation "com.google.ai.edge.litert:litert:2.4.0"
+    implementation "com.google.ai.edge.litert:litert:1.4.2"
 
     androidTestImplementation "androidx.test:runner:1.6.1"
     androidTestImplementation "androidx.test:rules:1.6.1"

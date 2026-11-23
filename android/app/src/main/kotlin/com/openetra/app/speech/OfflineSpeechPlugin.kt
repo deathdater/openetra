@@ -53,8 +53,10 @@ class OfflineSpeechPlugin(
             if (outFile.exists() && outFile.length() > 0L && sha256(outFile) == SILERO_VAD_SHA256) {
                 return outFile
             }
-            val lookupKey = FlutterInjector.instance().flutterLoader()
-                .getLookupKeyForAsset("assets/models/vad/silero_vad.int8.onnx")
+            val lookupKey = runCatching {
+                FlutterInjector.instance().flutterLoader()
+                    .getLookupKeyForAsset("assets/models/vad/silero_vad.int8.onnx")
+            }.getOrElse { "flutter_assets/assets/models/vad/silero_vad.int8.onnx" }
             val tmpFile = File(vadDir, "silero_vad.int8.onnx.tmp")
             val digest = MessageDigest.getInstance("SHA-256")
             val buf = ByteArray(32 * 1024)

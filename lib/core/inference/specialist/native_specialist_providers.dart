@@ -100,7 +100,7 @@ class NativeEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
-/// LiteRT 2.4.0 banknote classifier bridge (activates when verified `.tflite`
+/// LiteRT 1.4.2 banknote classifier bridge (activates when verified `.tflite`
 /// currency model pack is installed).
 class NativeCurrencyClassifierProvider implements CurrencyClassifierProvider {
   NativeCurrencyClassifierProvider([MethodChannel? channel])

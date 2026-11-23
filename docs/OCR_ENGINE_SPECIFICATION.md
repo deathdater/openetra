@@ -39,4 +39,16 @@ TextRecognitionResult (confidence + pack availability status) -> Offline TTS
 - Low-confidence spans (`< 0.40`) are flagged with uncertainty rather than silently presented as verified text.
 
 ## 4. Graceful Degradation for Unprovisioned Indic Packs
-If a user in Reading mode requests Hindi or Kannada document reading before the offline Indic OCR pack is downloaded, `OcrRouter` honestly announces that only Latin OCR (Mirage) is currently active locally and directs the user to **Model Manager** to install the offline pack.
+If a user in Reading mode requests Tamil, Telugu, Malayalam, or Bengali document reading before its optional offline `tessdata` pack is installed under app-private storage, `OcrRouter` honestly announces that that Indic script pack is not yet installed locally and avoids falling back blindly to Mirage's Latin-only OCR.
+
+---
+
+## 5. Verified Offline Android 15 ARM64 Implementation & Emulator Measurements (`IndicOcrPlugin`)
+- **Channel & Native Providers:** `IndicOcrPlugin` (`com.openetra.app/indic_ocr`) wired to `NativeIndicOcrProvider` on the Dart side.
+- **Bundled Hindi/Devanagari Route:** `com.google.mlkit:text-recognition-devanagari:16.0.1` (`libmlkit_google_ocr_pipeline.so`) executes primary Devanagari OCR; if `fullText` is empty, `NativeIndicOcrProvider` automatically falls back to `cz.adaptech.tesseract4android:tesseract4android:4.9.0` with SHA-256-verified bundled `hin.traineddata` (`4c73ffc59d497c186b19d1e90f5d721d678ea6b2e277b719bee4e2af12271825`).
+- **Bundled Kannada Route:** Tesseract `4.9.0` with SHA-256-verified bundled `kan.traineddata` (`bd31e6b6ae93271e3bcf5383d306d8eefbb91542937cd6d735a5930c970e61d8`).
+- **Additional Optional Languages:** `tam`, `tel`, `mal`, `ben` `.traineddata` packs supported on disk in `filesDir/tesseract/tessdata/` when provisioned via Model Manager.
+- **Emulator Results (`Medium_Phone_API_35`, `800x220` high-contrast rendered bitmaps):**
+  - ML Kit Devanagari (`नमस्ते निकास 500`): `208 ms`, exact text recovered.
+  - Tesseract `hin` (`नमस्ते निकास 500`): `27 ms`, exact text recovered.
+  - Tesseract `kan` (`ಬೆಂಗಳೂರು 500`): `14 ms`, exact text recovered.
