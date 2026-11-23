@@ -149,6 +149,21 @@ class SpecialistVisionPlugin(
                 vec[64 + c] = sqrt(varVal)
             }
 
+            // Normalize each descriptor block independently so raw edge sums
+            // never drown out HSV color and spatial contrast features.
+            fun normalizeBlock(start: Int, end: Int, weight: Float) {
+                var sumSq = 0.0f
+                for (i in start until end) sumSq += vec[i] * vec[i]
+                val blockNorm = sqrt(sumSq)
+                if (blockNorm > 1e-6f) {
+                    val scale = weight / blockNorm
+                    for (i in start until end) vec[i] *= scale
+                }
+            }
+            normalizeBlock(0, 48, 0.65f)   // HSV color distribution
+            normalizeBlock(48, 80, 0.20f)  // Spatial 4x4 luminance + contrast
+            normalizeBlock(80, 96, 0.15f)  // Edge orientation histogram
+
             var normSq = 0.0f
             for (v in vec) normSq += v * v
             val norm = sqrt(normSq)

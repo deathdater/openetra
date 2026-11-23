@@ -271,14 +271,12 @@ class OpenetraCoordinator {
       await resourceBloc.resourceManager.refreshTelemetry();
       final frame = await _captureOrReuseFrame(overrideFrame: overrideFrame);
       final registeredProfiles = await database.listPersonalObjects();
-      final regKeywords = registeredProfiles
-          .map((p) => p.name.trim())
-          .where((n) => n.isNotEmpty)
-          .toList();
+      // Keep general/continuous scene perception unbiased (do NOT pass
+      // registered object names as VLM keywords, which can prime Mirage to
+      // hallucinate absent personal items).
       final obs = await orchestrator.runVisualPerception(
         frame,
         task: ModelTask.scenePerception,
-        keywords: regKeywords.isNotEmpty ? regKeywords : null,
       );
       _lastObservation = obs;
 

@@ -196,22 +196,28 @@ class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
       storedVecs = await database.getObjectEmbeddings(matchingProfile.first.id);
     }
 
-    // Check label matches first (token + synonym aware)
-    final labelMatches = obs.objects
+    // Require semantic label/synonym match first so unrelated objects in the
+    // scene can never falsely match via HSV/edge histogram similarity.
+    final matches = obs.objects
         .where((o) => RegisteredObjectSceneMatcher.matchesObjectLabel(target, o.name))
         .toList();
 
-    // Score candidates with visual embedding similarity across label matches,
-    // or across ALL detections if saved embeddings exist and Mirage used a different label.
-    ObjectDetection? bestMatch;
-    double bestCosine = -1.0;
-    final candidatesForEmbed =
-        labelMatches.isNotEmpty ? labelMatches : obs.objects;
+    if (matches.isEmpty) {
+      emit(ObjectMemoryState(
+        profiles: currentProfiles,
+        lastSearchResult:
+            'Could not find $target in the current camera view. Try panning slowly.',
+      ));
+      return;
+    }
 
+    // Score label-matched candidates with visual embedding similarity if available.
+    ObjectDetection bestMatch = matches.first;
+    double bestCosine = -1.0;
     if (event.frame != null &&
         embeddingProvider != null &&
         storedVecs.isNotEmpty) {
-      for (final candidate in candidatesForEmbed) {
+      for (final candidate in matches) {
         final candVec = await embeddingProvider!.computeEmbedding(
           event.frame!,
           candidate.boundingBox,
@@ -225,26 +231,6 @@ class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
           }
         }
       }
-    }
-
-    // Accept visual-only match when similarity >= 0.78, or fall back to labelMatches.
-    final List<ObjectDetection> matches;
-    if (labelMatches.isNotEmpty) {
-      matches = labelMatches;
-      bestMatch ??= labelMatches.first;
-    } else if (bestMatch != null && bestCosine >= 0.78) {
-      matches = [bestMatch];
-    } else {
-      matches = const [];
-    }
-
-    if (matches.isEmpty || bestMatch == null) {
-      emit(ObjectMemoryState(
-        profiles: currentProfiles,
-        lastSearchResult:
-            'Could not find $target in the current camera view. Try panning slowly.',
-      ));
-      return;
     }
 
     String zone(BoundingBox b) {
@@ -262,6 +248,15 @@ class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
         profiles: currentProfiles,
         lastSearchResult:
             'I see ${matches.length} possible matches for $target at: $locations. Please confirm which one you want.',
+      ));
+      return;
+    }
+
+    if (storedVecs.isNotEmpty && bestCosine >= 0.0 && bestCosine < 0.72) {
+      emit(ObjectMemoryState(
+        profiles: currentProfiles,
+        lastSearchResult:
+            'Could not confirm your registered $target in the current camera view (visual appearance did not match). Try panning slowly.',
       ));
       return;
     }

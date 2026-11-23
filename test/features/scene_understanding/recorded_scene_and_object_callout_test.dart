@@ -494,7 +494,7 @@ void main() {
     await tester.runAsync(() => db.close());
   });
 
-  test('runFindRegisteredObjects scans all actual registered items (never hardcoded wallet) and matches multi-word/synonym/moderate-embedding items in live & continuous scenes', () async {
+  test('runFindRegisteredObjects scans all actual registered items (never hardcoded wallet) and strictly rejects absent/unrelated objects in live & continuous scenes', () async {
     final db = await OpenetraDatabase.open(
       factory: databaseFactoryFfi,
       dbPath: inMemoryDatabasePath,
@@ -507,14 +507,32 @@ void main() {
           ObjectDetection(
             entityId: 1,
             name: 'bottle',
-            confidence: 0.68,
+            confidence: 0.80,
             boundingBox: BoundingBox(x1: 360, y1: 420, x2: 620, y2: 740),
           ),
           ObjectDetection(
             entityId: 2,
             name: 'glasses',
-            confidence: 0.65,
+            confidence: 0.78,
             boundingBox: BoundingBox(x1: 720, y1: 450, x2: 920, y2: 650),
+          ),
+        ],
+      ),
+      _sampleObservation(
+        id: 'v-absent',
+        setting: 'hallway',
+        objects: const [
+          ObjectDetection(
+            entityId: 3,
+            name: 'chair',
+            confidence: 0.92,
+            boundingBox: BoundingBox(x1: 300, y1: 400, x2: 650, y2: 800),
+          ),
+          ObjectDetection(
+            entityId: 4,
+            name: 'door',
+            confidence: 0.90,
+            boundingBox: BoundingBox(x1: 700, y1: 200, x2: 950, y2: 900),
           ),
         ],
       ),
@@ -566,15 +584,44 @@ void main() {
     expect(foundMsg, contains('my water flask'));
     expect(foundMsg, contains('reading specs'));
 
-    // 4. Continuous / live scene understanding also passes registered keywords and calls them out
+    // 4. Scene WITHOUT registered items (only chair & door) MUST NOT falsely report them,
+    // and general/continuous scene perception must keep keywords null to avoid VLM hallucination.
     await deps.coordinator.runDescribeSurroundings(
-      overrideFrame: _sampleFrame('cont-1'),
+      overrideFrame: _sampleFrame('cont-absent'),
     );
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(stubVision.capturedKeywords.last, containsAll(['my water flask', 'reading specs']));
-    final liveMsg = deps.voiceAssistantBloc.state.lastResponse?.spokenText ?? '';
-    expect(liveMsg, contains('Your registered my water flask'));
-    expect(liveMsg, contains('Your registered reading specs'));
+    expect(stubVision.capturedKeywords.last, isNull);
+    final absentMsg = deps.voiceAssistantBloc.state.lastResponse?.spokenText ?? '';
+    expect(absentMsg, isNot(contains('my water flask')));
+    expect(absentMsg, isNot(contains('reading specs')));
+
+    // 5. Even with an identical visual embedding vector, unrelated objects (chair/door)
+    // must NEVER match a registered object!
+    await db.saveObjectEmbedding(
+      id: 'emb-flask',
+      objectId: 'reg-flask',
+      modelId: 'stub-embed',
+      vector: Float32List.fromList([1.0, 0.0, 0.0, 0.0]),
+    );
+    const matcher = RegisteredObjectSceneMatcher();
+    final falseMatches = await matcher.matchInObservation(
+      observation: _sampleObservation(
+        id: 'obs-chair-only',
+        setting: 'hallway',
+        objects: const [
+          ObjectDetection(
+            entityId: 9,
+            name: 'chair',
+            confidence: 0.95,
+            boundingBox: BoundingBox(x1: 300, y1: 400, x2: 650, y2: 800),
+          ),
+        ],
+      ),
+      database: db,
+      frame: _sampleFrame('f-chair'),
+      embeddingProvider: _StubEmbeddingProvider([1.0, 0.0, 0.0, 0.0]),
+    );
+    expect(falseMatches, isEmpty);
 
     await db.close();
   });

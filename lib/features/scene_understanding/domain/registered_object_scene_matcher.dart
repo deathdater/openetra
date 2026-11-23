@@ -6,23 +6,26 @@ import 'recorded_scene_memory.dart';
 import 'scene_understanding_engine.dart';
 
 /// Relates live, search, or recorded scene observations to the user's locally
-/// stored personal objects (`personal_objects` + `object_embeddings`),
-/// recognizing registered items via:
-/// - Tier 1: 96-dim visual embedding cosine similarity (`>= 0.78`, or `>= 0.58`
-///   when corroborated by a label match), and
-/// - Tier 2: Token/synonym-aware label matching (`>= 0.60` confidence) when
-///   visual embeddings are absent or unavailable.
+/// stored personal objects (`personal_objects` + `object_embeddings`) with
+/// strict false-positive protection:
+///
+/// 1. Semantic label/synonym agreement (`matchesObjectLabel`) is ALWAYS
+///    required so an unrelated object (e.g., a chair or wall) is never falsely
+///    reported as a registered personal belonging.
+/// 2. When saved visual embeddings exist and a live crop embedding is computed,
+///    visual appearance MUST corroborate the detection (`cosine >= 0.78`),
+///    rejecting different-looking objects of the same class.
+/// 3. When no visual embeddings are stored (name-only registration), a high
+///    detection confidence (`>= 0.72`) is required.
 class RegisteredObjectSceneMatcher {
   const RegisteredObjectSceneMatcher({
     this.embeddingThreshold = 0.78,
-    this.fusedEmbeddingThreshold = 0.58,
-    this.visualRejectionFloor = 0.45,
-    this.labelConfidenceThreshold = 0.60,
+    this.minDetectionConfidenceWithEmbedding = 0.50,
+    this.labelConfidenceThreshold = 0.72,
   });
 
   final double embeddingThreshold;
-  final double fusedEmbeddingThreshold;
-  final double visualRejectionFloor;
+  final double minDetectionConfidenceWithEmbedding;
   final double labelConfidenceThreshold;
 
   static const Set<String> _stopWords = {
@@ -45,11 +48,11 @@ class RegisteredObjectSceneMatcher {
 
   static const List<Set<String>> _synonymGroups = [
     {'bottle', 'flask', 'tumbler', 'thermos', 'waterbottle'},
-    {'cup', 'mug', 'teacup', 'coffee'},
+    {'cup', 'mug', 'teacup'},
     {'phone', 'mobile', 'cellphone', 'smartphone', 'handset'},
     {'glasses', 'eyeglasses', 'spectacles', 'specs', 'sunglasses', 'goggles'},
     {'key', 'keys', 'keychain', 'keyring'},
-    {'wallet', 'billfold', 'cardholder'},
+    {'wallet', 'billfold', 'cardholder', 'pouch'},
     {'bag', 'backpack', 'handbag', 'tote', 'satchel', 'rucksack', 'purse'},
     {'laptop', 'notebook', 'computer', 'macbook'},
     {'watch', 'wristwatch', 'smartwatch'},
@@ -57,7 +60,7 @@ class RegisteredObjectSceneMatcher {
     {'cane', 'stick'},
     {'headphone', 'headphones', 'earphone', 'earphones', 'earbuds', 'headset'},
     {'charger', 'adapter', 'cable'},
-    {'book', 'notebook', 'diary'},
+    {'book', 'diary'},
     {'umbrella', 'parasol'},
     {'medicine', 'pill', 'pills', 'tablet', 'tablets'},
   ];
@@ -121,13 +124,15 @@ class RegisteredObjectSceneMatcher {
     final seenProfileIds = <String>{};
 
     for (final profile in profiles) {
-      final embeddings = await database.getObjectEmbeddings(profile.id);
       if (profile.name.trim().isEmpty) continue;
+      final embeddings = await database.getObjectEmbeddings(profile.id);
 
       RecognizedRegisteredMatch? bestMatch;
 
       for (final det in observation.objects) {
-        final labelMatches = matchesObjectLabel(profile.name, det.name);
+        // Strict semantic gate: never report a registered object if Mirage
+        // detected an unrelated object class (e.g., chair, wall, table).
+        if (!matchesObjectLabel(profile.name, det.name)) continue;
 
         final pos = SceneUnderstandingEngine.deriveRelativePosition(
           det.boundingBox,
@@ -135,66 +140,43 @@ class RegisteredObjectSceneMatcher {
         );
         final zone = RecordedSceneAggregator.zoneKey(pos);
 
-        double? bestCos;
+        // Tier 1: When saved visual embeddings exist and live RGB is available,
+        // require visual appearance corroboration (>= embeddingThreshold).
         if (embeddings.isNotEmpty &&
             frame != null &&
             frame.rgbBytes != null &&
-            embeddingProvider != null &&
-            det.confidence >= 0.35) {
+            embeddingProvider != null) {
+          if (det.confidence < minDetectionConfidenceWithEmbedding) continue;
           final liveVec = await embeddingProvider.computeEmbedding(
             frame,
             det.boundingBox,
           );
           if (liveVec != null && liveVec.isNotEmpty) {
-            var maxSim = -1.0;
+            var bestCos = -1.0;
             for (final savedVec in embeddings) {
               final cos = cosineSimilarity(liveVec, savedVec);
-              if (cos > maxSim) maxSim = cos;
+              if (cos > bestCos) bestCos = cos;
             }
-            bestCos = maxSim;
+            if (bestCos >= embeddingThreshold) {
+              if (bestMatch == null || bestCos > bestMatch.certainty) {
+                bestMatch = RecognizedRegisteredMatch(
+                  objectId: profile.id,
+                  objectName: profile.name,
+                  zone: zone,
+                  certainty: bestCos,
+                  matchedByEmbedding: true,
+                );
+              }
+            }
+            // Do NOT fall back to label-only if a visual embedding was computed
+            // and failed verification — this prevents false positives.
+            continue;
           }
         }
 
-        // Tier 1A: Strong standalone visual embedding match (even if label differs).
-        if (bestCos != null && bestCos >= embeddingThreshold) {
-          if (bestMatch == null || bestCos > bestMatch.certainty) {
-            bestMatch = RecognizedRegisteredMatch(
-              objectId: profile.id,
-              objectName: profile.name,
-              zone: zone,
-              certainty: bestCos,
-              matchedByEmbedding: true,
-            );
-          }
-          continue;
-        }
-
-        // Tier 1B: Fused label + moderate visual similarity match.
-        if (labelMatches &&
-            bestCos != null &&
-            bestCos >= fusedEmbeddingThreshold &&
-            det.confidence >= 0.40) {
-          final fused = (bestCos * 0.65) + (det.confidence * 0.35);
-          if (bestMatch == null || fused > bestMatch.certainty) {
-            bestMatch = RecognizedRegisteredMatch(
-              objectId: profile.id,
-              objectName: profile.name,
-              zone: zone,
-              certainty: fused,
-              matchedByEmbedding: true,
-            );
-          }
-          continue;
-        }
-
-        // Tier 2: Label match when no visual embedding contradicted it.
-        // If a live visual embedding was computed and strongly contradicted the
-        // saved appearance (< visualRejectionFloor), avoid a false-positive match.
-        final visuallyContradicted =
-            bestCos != null && bestCos < visualRejectionFloor;
-        if (labelMatches &&
-            !visuallyContradicted &&
-            det.confidence >= labelConfidenceThreshold) {
+        // Tier 2: High-confidence label match when no visual embedding is stored
+        // (or when embedding provider is unavailable on host).
+        if (det.confidence >= labelConfidenceThreshold) {
           if (bestMatch == null || det.confidence > bestMatch.certainty) {
             bestMatch = RecognizedRegisteredMatch(
               objectId: profile.id,
