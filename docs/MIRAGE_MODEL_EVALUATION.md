@@ -1,0 +1,32 @@
+# Mirage Model Evaluation
+
+## 1. Provenance & Published Reference
+- **Model:** `Cactus-Compute/mirage` (commit `76c1e9e53381aca8fc3843c636216c96ff220122`, `mirage.cact`, 21,611,043 B, 2-bit quantised, ~51.3M parameters, Apache-2.0).
+- **Vendor Reference (Galaxy S26, Cactus Blog):** 74 ms NPU / 107 ms CPU *(external vendor claim; not yet independently measured on Galaxy S26 hardware in this repo).*
+
+---
+
+## 2. Reproducible Host CPU Measurements (Apple Silicon arm64, macOS 15.1)
+
+Measured locally using `harness/mirage_probe` compiled against Cactus `4.1.4` (`rt/macos/libcactus.a`):
+
+| COCO Image | Resolution | Options Preset | Cold Load (ms) | Run 0 (ms) | Warm Run 1 (ms) | Output Summary |
+|---|---|---|---:|---:|---:|---|
+| `000000231049` (Street stop sign) | `427x640` | Full default (incl. masks) | `24.0` | `258.3` | `152.3` | `suburban street`, 8 objs, 1 text (`ARRET`), 2 rels |
+| `000000231049` | `427x640` | Selective (no masks, no text) | `18.1` | `174.7` | — | 8 objs (`stop sign`, `car`, `pole`, `tree`, `grass`) |
+| `000000231049` | `427x640` | `sections: ["text"]` | `15.3` | `136.4` | — | `ARRET` (`score: 0.871`) |
+| `000000231049` | `427x640` | `form` (3-class sign enum) | `15.7` | `53.7` | — | `"stop"` (`p=0.7713`) |
+| `000000231049` | `427x640` | `mask_format: "bitmap"` | `15.5` | `241.5` | — | RLE bitmaps |
+| `000000231049` | `427x640` | `mask_format: "polygons"` | `17.3` | `372.0` | — | Polygon arrays |
+| `000000000139` (Living room) | `640x426` | Selective (scene+objs+rels+events) | `15.2` | `244.8` | `219.6` | `living room`, 23 objs (11 chairs id=6), 3 rels |
+| `000000000785` (Skiing) | `640x425` | Selective | `16.3` | `231.3` | `293.3` | `scene: null`, 18 objs, 17 rels |
+| `000000001000` (Park) | `640x480` | Selective | `14.6` | `172.9` | `242.4` | `park`, 13 objs, 5 rels, 5 events |
+| `000000002153` (Baseball) | `640x480` | Selective | `15.1` | `241.2` | `171.2` | `baseball field`, 6 objs, 3 rels |
+
+---
+
+## 3. Key Findings Driving Openetra Design
+1. **Mask Omission Cuts Latency:** Omitting `mask` unless contour extraction is strictly needed saves ~100–200 ms per frame on CPU (`174.7 ms` vs `372.0 ms` polygons).
+2. **Text-Only and Form Requests are Fast:** `text` only (`136.4 ms`) and `form` (`53.7 ms`) justify dedicated lightweight `SmartReader` / confirmation query profiles.
+3. **Entity Grouping & Relation Filtering Required:** Mirage shares entity `id` across multiple boxes (11 chairs with `id: 6` in `000000000139`), and occasionally outputs implausible relations (`rug on table`) or `scene: null`. `SceneUnderstandingEngine` handles deduplication and defensive parsing.
+4. **Target Android ARM64 Emulator & Device Validation:** Real Android ARM64 JNI load/inference metrics will be recorded here in Milestone `v0.6.0` after APK testing on `Medium_Phone_API_35`.
