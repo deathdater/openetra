@@ -1,5 +1,11 @@
 # Openetra Context Changelog
 
+## [1.1.0-assistive-phase0-1] - 2026-11-23
+### Added & Verified
+- Authored `docs/ASSISTIVE_CONTROLS_IMPACT_ANALYSIS.md` after repository reconnaissance and `40/40` baseline test verification.
+- Implemented shared `lib/core/assistive/` core (`AssistiveActionRouter`, `CapabilityAvailabilityService`, `TaskOrchestrator`, `CameraResourceManager`, `AudioArbitrator`, `PermissionCoordinator`, `FeedbackDispatcher`, `CustomGestureRecord`).
+- Upgraded `OpenetraDatabase` to `schemaVersion = 3` (`assistive_preferences` + `custom_gestures`) and passed `44/44` host tests (`shared_architecture_test.dart`).
+
 ## [1.0.0-release-candidate] - 2026-11-23
 ### Added & Verified
 - Bundled & SHA-256-verified all 5 remaining Apache-2.0 `tesseract-ocr/tessdata_fast` models (`mar`, `tam`, `tel`, `mal`, `ben`) alongside `hin` & `kan`, covering all 8 target Indian languages (`en-IN` + 7 Indic scripts); updated `pubspec.yaml` (`1.0.0+2`), `IndicOcrPlugin.kt`, `NativeIndicOcrProvider` (`mr-IN -> mar`), and `AIModelRegistry`.

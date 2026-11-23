@@ -1,6 +1,9 @@
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
+import '../assistive/assistive_action.dart';
+import '../assistive/assistive_action_router.dart';
+import '../assistive/custom_gesture_record.dart';
 import '../domain/entities/entities.dart';
 import '../errors/openetra_failure.dart';
 import '../../features/shopping/domain/shopping_assistant_service.dart';
@@ -52,7 +55,7 @@ class OpenetraDatabase {
   OpenetraDatabase._(this._db);
 
   final Database _db;
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 3;
 
   /// Opens or creates the local database. Pass [factory] (e.g. sqflite_common_ffi)
   /// and [dbPath] (`inMemoryDatabasePath`) for deterministic host unit tests.
@@ -75,11 +78,15 @@ class OpenetraDatabase {
             await _createSchema(database);
             await _createLocalProductsTable(database);
             await _seedInitialProducts(database);
+            await _createAssistiveTables(database);
           },
           onUpgrade: (database, oldVersion, newVersion) async {
             if (oldVersion < 2) {
               await _createLocalProductsTable(database);
               await _seedInitialProducts(database);
+            }
+            if (oldVersion < 3) {
+              await _createAssistiveTables(database);
             }
           },
         ),
@@ -226,6 +233,32 @@ class OpenetraDatabase {
         net_quantity TEXT,
         category TEXT,
         source TEXT NOT NULL,
+        updated_at_ms INTEGER NOT NULL
+      )
+    ''');
+  }
+
+  static Future<void> _createAssistiveTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS assistive_preferences (
+        pref_key TEXT PRIMARY KEY,
+        pref_value TEXT NOT NULL,
+        updated_at_ms INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS custom_gestures (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        action_id TEXT NOT NULL,
+        action_arg TEXT,
+        sample_count INTEGER NOT NULL,
+        templates_json TEXT NOT NULL,
+        threshold REAL NOT NULL,
+        is_validated INTEGER NOT NULL,
+        is_emergency_opt_in INTEGER NOT NULL,
+        created_at_ms INTEGER NOT NULL,
         updated_at_ms INTEGER NOT NULL
       )
     ''');
@@ -672,6 +705,90 @@ class OpenetraDatabase {
         .toList();
   }
 
+  Future<void> setAssistivePreference(String key, String value) async {
+    await _db.insert(
+      'assistive_preferences',
+      {
+        'pref_key': key,
+        'pref_value': value,
+        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<String?> getAssistivePreference(String key) async {
+    final rows = await _db.query(
+      'assistive_preferences',
+      where: 'pref_key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['pref_value'] as String?;
+  }
+
+  Future<Map<String, String>> getAllAssistivePreferences() async {
+    final rows = await _db.query('assistive_preferences');
+    return {
+      for (final r in rows) r['pref_key'] as String: r['pref_value'] as String,
+    };
+  }
+
+  Future<void> upsertCustomGesture(CustomGestureRecord gesture) async {
+    await _db.insert(
+      'custom_gestures',
+      {
+        'id': gesture.id,
+        'name': gesture.name.trim(),
+        'action_id': gesture.actionId.name,
+        'action_arg': gesture.actionArgument,
+        'sample_count': gesture.sampleCount,
+        'templates_json': gesture.encodeTemplatesJson(),
+        'threshold': gesture.threshold,
+        'is_validated': gesture.isValidated ? 1 : 0,
+        'is_emergency_opt_in': gesture.isEmergencyOptIn ? 1 : 0,
+        'created_at_ms': gesture.createdAt.millisecondsSinceEpoch,
+        'updated_at_ms': gesture.updatedAt.millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<CustomGestureRecord>> listCustomGestures() async {
+    final rows = await _db.query('custom_gestures', orderBy: 'updated_at_ms DESC');
+    return rows.map((r) {
+      final rawAction = (r['action_id'] as String?) ?? 'describeScene';
+      final actionId = AssistiveActionRouter.parseId(rawAction) ??
+          AssistiveActionId.values.firstWhere(
+            (e) => e.name == rawAction,
+            orElse: () => AssistiveActionId.describeScene,
+          );
+      return CustomGestureRecord(
+        id: r['id'] as String,
+        name: r['name'] as String,
+        actionId: actionId,
+        actionArgument: r['action_arg'] as String?,
+        sampleCount: r['sample_count'] as int,
+        templates:
+            CustomGestureRecord.decodeTemplatesJson(r['templates_json'] as String),
+        threshold: (r['threshold'] as num).toDouble(),
+        isValidated: (r['is_validated'] as int) == 1,
+        isEmergencyOptIn: (r['is_emergency_opt_in'] as int) == 1,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(r['created_at_ms'] as int),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(r['updated_at_ms'] as int),
+      );
+    }).toList();
+  }
+
+  Future<void> deleteCustomGesture(String id) async {
+    await _db.delete('custom_gestures', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> deleteAllCustomGestures() async {
+    await _db.delete('custom_gestures');
+  }
+
   /// User-controlled atomic deletion of personal data, history, scanned docs, and safety logs.
   Future<void> deleteAllUserData() async {
     await _db.transaction((txn) async {
@@ -681,6 +798,8 @@ class OpenetraDatabase {
       await txn.delete('scanned_documents');
       await txn.delete('conversation_history');
       await txn.delete('safety_events');
+      await txn.delete('assistive_preferences');
+      await txn.delete('custom_gestures');
       await txn.delete(
         'local_products',
         where: 'source != ?',
