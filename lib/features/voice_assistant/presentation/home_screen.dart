@@ -69,6 +69,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       flashlightController: widget.coordinator.flashlightController,
                       emergencyBloc: widget.coordinator.emergencyBloc,
                       gestureBloc: widget.coordinator.gestureBloc,
+                      floatingCompanionBloc:
+                          widget.coordinator.floatingCompanionBloc,
                     ),
                   ),
                 );

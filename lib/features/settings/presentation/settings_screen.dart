@@ -9,6 +9,8 @@ import '../../emergency/bloc/emergency_bloc.dart';
 import '../../emergency/presentation/emergency_assistance_screen.dart';
 import '../../flashlight/domain/intelligent_flashlight_controller.dart';
 import '../../flashlight/presentation/flashlight_settings_screen.dart';
+import '../../floating_companion/bloc/floating_companion_bloc.dart';
+import '../../floating_companion/presentation/floating_widget_settings_screen.dart';
 import '../../gestures/bloc/gesture_automation_bloc.dart';
 import '../../gestures/presentation/gesture_automation_screen.dart';
 import '../bloc/settings_bloc.dart';
@@ -19,11 +21,13 @@ class SettingsScreen extends StatelessWidget {
     this.flashlightController,
     this.emergencyBloc,
     this.gestureBloc,
+    this.floatingCompanionBloc,
   });
 
   final IntelligentFlashlightController? flashlightController;
   final EmergencyBloc? emergencyBloc;
   final GestureAutomationBloc? gestureBloc;
+  final FloatingCompanionBloc? floatingCompanionBloc;
 
   static const List<({String locale, String label})> _languages = [
     (locale: 'en-IN', label: 'English (India)'),
@@ -196,6 +200,25 @@ class SettingsScreen extends StatelessWidget {
                             builder: (_) => BlocProvider.value(
                               value: gestureBloc!,
                               child: const GestureAutomationScreen(),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (floatingCompanionBloc != null) ...[
+                    AccessibleActionTile(
+                      title: 'Floating Assistive Companion',
+                      subtitle: 'Optional overlay orb with calm task-state glow above other apps',
+                      semanticHint: 'Double tap to configure floating assistive companion',
+                      icon: Icons.assistant_outlined,
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => BlocProvider.value(
+                              value: floatingCompanionBloc!,
+                              child: const FloatingWidgetSettingsScreen(),
                             ),
                           ),
                         );

@@ -29,6 +29,8 @@ import '../features/emergency/data/protected_contact_store.dart';
 import '../features/emergency/domain/emergency_assistance_service.dart';
 import '../features/flashlight/data/native_flashlight_gateway.dart';
 import '../features/flashlight/domain/intelligent_flashlight_controller.dart';
+import '../features/floating_companion/bloc/floating_companion_bloc.dart';
+import '../features/floating_companion/data/native_floating_companion_bridge.dart';
 import '../features/gestures/bloc/gesture_automation_bloc.dart';
 import '../features/gestures/data/native_gesture_gateway.dart';
 import '../features/hazard_detection/bloc/hazard_detection_bloc.dart';
@@ -84,6 +86,7 @@ class OpenetraDependencies {
     required this.emergencyBloc,
     required this.flashlightController,
     required this.gestureBloc,
+    required this.floatingCompanionBloc,
   });
 
   final OpenetraDatabase database;
@@ -117,6 +120,7 @@ class OpenetraDependencies {
   final EmergencyBloc emergencyBloc;
   final IntelligentFlashlightController flashlightController;
   final GestureAutomationBloc gestureBloc;
+  final FloatingCompanionBloc floatingCompanionBloc;
 
   static Future<OpenetraDependencies> bootstrap({
     required OpenetraDatabase database,
@@ -237,10 +241,18 @@ class OpenetraDependencies {
       router: actionRouter,
       availabilityService: availabilityService,
     );
+    final floatingBridge = NativeFloatingCompanionBridge();
     final feedbackDispatcher = FeedbackDispatcher(
       orchestrator: taskOrchestrator,
       audioBloc: audioBloc,
-    )..start();
+    )
+      ..attachOverlaySink(floatingBridge)
+      ..start();
+    final floatingCompanionBloc = FloatingCompanionBloc(
+      bridge: floatingBridge,
+      taskOrchestrator: taskOrchestrator,
+      database: database,
+    );
     final gestureBloc = GestureAutomationBloc(
       gateway: NativeGestureGateway(),
       taskOrchestrator: taskOrchestrator,
@@ -272,6 +284,7 @@ class OpenetraDependencies {
       emergencyBloc: emergencyBloc,
       flashlightController: flashlightController,
       gestureBloc: gestureBloc,
+      floatingCompanionBloc: floatingCompanionBloc,
       shoppingService: shoppingService,
       currencyService: currencyService,
       safetyOutputFilter: (r) => safetyPolicy.enforceResponse(r),
@@ -291,6 +304,7 @@ class OpenetraDependencies {
     resourceBloc.add(const RefreshDeviceResources());
     emergencyBloc.add(const LoadEmergencyConfig());
     gestureBloc.add(const LoadGestureConfig());
+    floatingCompanionBloc.add(const LoadFloatingCompanionConfig());
     await flashlightController.initialize();
 
     return OpenetraDependencies(
@@ -324,6 +338,7 @@ class OpenetraDependencies {
       emergencyBloc: emergencyBloc,
       flashlightController: flashlightController,
       gestureBloc: gestureBloc,
+      floatingCompanionBloc: floatingCompanionBloc,
     );
   }
 
@@ -486,6 +501,7 @@ class _OpenetraAppState extends State<OpenetraApp> {
         BlocProvider.value(value: widget.deps.settingsBloc),
         BlocProvider.value(value: widget.deps.emergencyBloc),
         BlocProvider.value(value: widget.deps.gestureBloc),
+        BlocProvider.value(value: widget.deps.floatingCompanionBloc),
       ],
       child: MaterialApp(
         title: 'Openetra',

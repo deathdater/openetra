@@ -1,12 +1,11 @@
 # Openetra Local Engineering Context
 
-**Current Version:** `1.3.0-gesture-automation`  
-**Phase:** Assistive Controls Milestone 3 (Phases 5–7) — Custom Hand Gesture Automation  
+**Current Version:** `1.4.0-floating-companion`  
+**Phase:** Assistive Controls Milestone 4 (Phases 8–9) — Floating Assistive Companion & Background Orchestration  
 **Last Updated:** 2026-11-23  
 **Git Branch:** `main`  
 
-## Delivered in `v1.3.0-gesture-automation`
-- **Model Asset & Registry:** Extracted official Apache-2.0 `hand_landmarks_detector.tflite` (`5,478,949 B`, SHA-256 `6acda74af3fbf40e68265c20c7394b2bad81a16a481dcd79ad7a081887c3d6b9`) from `hand_landmarker.task` into `assets/models/gesture/hand_landmarks_detector.tflite`; registered in `pubspec.yaml` and `AIModelRegistry` (`ModelTask.handGesture`).
-- **Native LiteRT Plugin:** Implemented `HandGesturePlugin.kt` (`com.openetra.app/gesture`) reusing bundled LiteRT `1.4.2` XNNPACK (zero new Gradle deps), SHA-256 verification, lazy load/unload, 21 3D landmarks + presence/handedness output, and zero video retention.
-- **Flutter Gesture Domain & UI:** Implemented `HandLandmarkFeatureExtractor` (palm-centered 84-dim L2-unit descriptor), `GestureEnrollmentEngine` (5-sample intra-consistency & inter-gesture collision checks), `GestureRecognitionEngine` (unknown rejection, top-2 margin, 3/4 temporal voting, cooldown), `GestureAutomationBloc` (strictly routing via `TaskOrchestrator` with explicit `emergencyGestureOptIn` safeguard), and `GestureAutomationScreen`.
-- **Verification:** `flutter analyze` (`No issues found!`) and `flutter test -r expanded` (`56/56` passing; synthetic held-out eval: 100/100 TP, 0 FP, 100% unknown rejection across 60 negative poses).
+## Delivered in `v1.4.0-floating-companion`
+- **Android Native Overlay & Service:** Added `FloatingWidgetState.kt` (10 states matching `AssistiveTaskPhase`), `FloatingOrbView.kt` (high-contrast calm radial glow, zero animator in `IDLE`/`PAUSED`/`COMPLETED` or reduced-motion, TalkBack semantics, snap-to-edge + inset clamping), `FloatingCompanionService.kt` (Android 14/15 `specialUse` foreground service with `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`, honest non-sensitive notification with Hide & Stop action, Category A vs Category C `MainActivity` trampoline), and `FloatingCompanionPlugin.kt` (`com.openetra.app/floating_companion`).
+- **Flutter Integration:** Implemented `FloatingWidgetConfig`, `FloatingCompanionBridge` (`FloatingOverlayStateSink`), `FloatingCompanionBloc`, and `FloatingWidgetSettingsScreen`; attached `FeedbackDispatcher.attachOverlaySink(floatingBridge)` and wired Settings & `MainActivity.onNewIntent`.
+- **Verification:** `flutter analyze` (`No issues found!`) and `flutter test -r expanded` (`58/58` passing).
