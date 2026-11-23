@@ -1,5 +1,10 @@
 import 'dart:async';
 import 'package:uuid/uuid.dart';
+import '../core/assistive/assistive_action_router.dart';
+import '../core/assistive/audio_arbitrator.dart';
+import '../core/assistive/camera_resource_manager.dart';
+import '../core/assistive/permission_coordinator.dart';
+import '../core/assistive/task_orchestrator.dart';
 import '../core/audio/bloc/audio_bloc.dart';
 import '../core/audio/native_offline_asr_provider.dart';
 import '../core/audio/speech_controller.dart';
@@ -12,6 +17,8 @@ import '../core/resource_management/bloc/device_resource_bloc.dart';
 import '../core/safety/bloc/safety_bloc.dart';
 import '../core/storage/openetra_database.dart';
 import '../features/currency/domain/currency_recognition_service.dart';
+import '../features/emergency/bloc/emergency_bloc.dart';
+import '../features/flashlight/domain/intelligent_flashlight_controller.dart';
 import '../features/hazard_detection/bloc/hazard_detection_bloc.dart';
 import '../features/navigation/domain/navigation_cue_service.dart';
 import '../features/object_memory/bloc/object_memory_bloc.dart';
@@ -40,6 +47,13 @@ class OpenetraCoordinator {
     this.speechController,
     this.offlineAsrProvider,
     this.barcodeScanner,
+    this.permissionCoordinator,
+    this.cameraResourceManager,
+    this.audioArbitrator,
+    this.actionRouter,
+    this.taskOrchestrator,
+    this.emergencyBloc,
+    this.flashlightController,
     ShoppingAssistantService? shoppingService,
     CurrencyRecognitionService? currencyService,
     AssistantResponse Function(AssistantResponse)? safetyOutputFilter,
@@ -62,6 +76,13 @@ class OpenetraCoordinator {
   final SpeechController? speechController;
   final NativeOfflineAsrProvider? offlineAsrProvider;
   final BarcodeScannerProvider? barcodeScanner;
+  final PermissionCoordinator? permissionCoordinator;
+  final CameraResourceManager? cameraResourceManager;
+  final AudioArbitrator? audioArbitrator;
+  final AssistiveActionRouter? actionRouter;
+  final TaskOrchestrator? taskOrchestrator;
+  final EmergencyBloc? emergencyBloc;
+  final IntelligentFlashlightController? flashlightController;
 
   final ShoppingAssistantService _shoppingService;
   final CurrencyRecognitionService _currencyService;
@@ -73,12 +94,17 @@ class OpenetraCoordinator {
 
   bool get isHazardLoopActive => _hazardLoopActive;
 
-  /// Stops TTS playback, continuous hazard loop, and camera streaming together.
   Future<void> stopAll() async {
     _hazardLoopActive = false;
     hazardBloc.add(const ResetHazardTracker());
     audioBloc.add(const InterruptSpeechRequested());
-    await cameraSource.stop();
+    await taskOrchestrator?.cancelCurrentTask(reason: 'Stopped by user');
+    if (cameraResourceManager != null) {
+      await cameraResourceManager!.forceReleaseAll();
+    } else {
+      await cameraSource.stop();
+    }
+    await flashlightController?.endAuthorizedTaskSession();
   }
 
   /// Captures a frame, extracts a matching Mirage crop (or center crop), and
@@ -185,11 +211,22 @@ class OpenetraCoordinator {
     );
   }
 
-  Future<CapturedFrame> _captureOrReuseFrame({CapturedFrame? overrideFrame}) async {
+  Future<CapturedFrame> _captureOrReuseFrame({
+    CapturedFrame? overrideFrame,
+    CameraLeasePurpose purpose = CameraLeasePurpose.scene,
+  }) async {
     if (overrideFrame != null) return overrideFrame;
-    await cameraSource.start(
-      minIntervalMs: resourceBloc.state.resourceState.inferenceIntervalMs,
-    );
+    await flashlightController?.beginAuthorizedTaskSession();
+    final interval = resourceBloc.state.resourceState.inferenceIntervalMs;
+    if (cameraResourceManager != null) {
+      final lease = await cameraResourceManager!.acquireLease(
+        purpose,
+        minIntervalMs: interval,
+        preemptExisting: true,
+      );
+      return cameraResourceManager!.captureFrame(lease);
+    }
+    await cameraSource.start(minIntervalMs: interval);
     return cameraSource.captureFrame();
   }
 
@@ -621,10 +658,37 @@ class OpenetraCoordinator {
         }
         settingsBloc.add(UpdatePreferredLanguage(nextLocale));
         audioBloc.add(UpdateSpeechConfig(locale: nextLocale));
+        flashlightController?.setLocale(nextLocale);
         await _emitSpoken(
           spokenText: 'Language switched to $nextLocale.',
           displaySummary: 'Language: $nextLocale',
         );
+        return;
+      case VoiceIntentType.emergencyAssistance:
+        if (emergencyBloc != null) {
+          emergencyBloc!.add(const RequestEmergencyInitiation());
+          await Future<void>.delayed(Duration.zero);
+          final msg = emergencyBloc!.state.statusMessage ??
+              'Opening emergency assistance confirmation.';
+          await _emitSpoken(
+            spokenText: msg,
+            displaySummary: 'Emergency confirmation',
+            priority: SpeechPriority.critical,
+            haptic: HapticPattern.critical,
+          );
+        }
+        return;
+      case VoiceIntentType.toggleFlashlight:
+        if (flashlightController != null) {
+          final arg = intent.targetArgument ?? '';
+          if (arg.contains('off')) {
+            await flashlightController!.setManualTorch(false);
+          } else if (arg.contains('on')) {
+            await flashlightController!.setManualTorch(true);
+          } else {
+            await flashlightController!.toggleManual();
+          }
+        }
         return;
       case VoiceIntentType.openSettings:
       case VoiceIntentType.unknown:

@@ -5,6 +5,8 @@ import '../../../app/theme.dart';
 import '../../../core/resource_management/bloc/device_resource_bloc.dart';
 import '../../../core/safety/bloc/safety_bloc.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../emergency/presentation/emergency_assistance_screen.dart';
+import '../../flashlight/presentation/flashlight_settings_screen.dart';
 import '../../model_manager/presentation/model_manager_screen.dart';
 import '../../object_memory/presentation/object_memory_screen.dart';
 import '../../settings/bloc/settings_bloc.dart';
@@ -63,7 +65,10 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => const SettingsScreen(),
+                    builder: (_) => SettingsScreen(
+                      flashlightController: widget.coordinator.flashlightController,
+                      emergencyBloc: widget.coordinator.emergencyBloc,
+                    ),
                   ),
                 );
               },
@@ -241,6 +246,53 @@ class _HomeScreenState extends State<HomeScreen> {
                                   : () => widget.coordinator
                                       .listenForOfflineVoiceCommand(),
                             ),
+                            if (widget.coordinator.flashlightController != null) ...[
+                              const SizedBox(height: 12),
+                              AccessibleActionTile(
+                                title: 'Intelligent Flashlight',
+                                subtitle:
+                                    'Manual torch toggle and low-light auto mode',
+                                semanticHint:
+                                    'Double tap to toggle or configure flashlight',
+                                icon: Icons.flashlight_on_outlined,
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => FlashlightSettingsScreen(
+                                        controller: widget
+                                            .coordinator.flashlightController!,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                            if (widget.coordinator.emergencyBloc != null) ...[
+                              const SizedBox(height: 12),
+                              AccessibleActionTile(
+                                title: 'Emergency Assistance',
+                                subtitle:
+                                    'Call trusted contact via confirmed phone dialer flow',
+                                semanticHint:
+                                    'Double tap to open emergency assistance and contacts',
+                                icon: Icons.emergency_outlined,
+                                accentBorderColor: OpenetraTheme.hazardCritical,
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => BlocProvider.value(
+                                        value: widget.coordinator.emergencyBloc!,
+                                        child: EmergencyAssistanceScreen(
+                                          audioArbitrator: widget
+                                              .coordinator.audioArbitrator,
+                                          locale: prefs.preferredLanguage,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                             const SizedBox(height: 16),
                             Row(
                               children: [

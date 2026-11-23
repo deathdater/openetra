@@ -10,6 +10,7 @@ import android.hardware.SensorManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Size
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -43,10 +44,27 @@ class CameraXCaptureManager(
     private var cameraProvider: ProcessCameraProvider? = null
 
     @Volatile
+    private var boundCamera: Camera? = null
+
+    @Volatile
     private var latestPitchDegrees: Double = 0.0
 
     @Volatile
+    private var latestMeanLuma: Double = -1.0
+
+    @Volatile
     private var isStarted: Boolean = false
+
+    fun isCameraActive(): Boolean = isStarted && boundCamera != null
+
+    fun currentMeanLuma(): Double = latestMeanLuma
+
+    fun setCameraTorch(enabled: Boolean): Boolean {
+        val cam = boundCamera ?: return false
+        if (!cam.cameraInfo.hasFlashUnit()) return false
+        cam.cameraControl.enableTorch(enabled)
+        return true
+    }
 
     init {
         channel.setMethodCallHandler(this)
@@ -97,7 +115,7 @@ class CameraXCaptureManager(
                 }
 
                 provider.unbindAll()
-                provider.bindToLifecycle(
+                boundCamera = provider.bindToLifecycle(
                     lifecycleOwner,
                     CameraSelector.DEFAULT_BACK_CAMERA,
                     analysis
@@ -135,6 +153,7 @@ class CameraXCaptureManager(
                 converted.width,
                 converted.height
             )
+            latestMeanLuma = q[0]
             val payload = mapOf(
                 "rgbBytes" to converted.rgb,
                 "width" to converted.width,
@@ -238,6 +257,7 @@ class CameraXCaptureManager(
 
     fun stopCamera() {
         isStarted = false
+        boundCamera = null
         sensorManager?.unregisterListener(this)
         pendingCapture.getAndSet(null)?.let { cb ->
             mainHandler.post { cb.error("CAMERA_STOPPED", "Camera stopped", null) }

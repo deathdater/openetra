@@ -12,6 +12,8 @@ enum VoiceIntentType {
   stopSpeaking,
   switchMode,
   switchLanguage,
+  emergencyAssistance,
+  toggleFlashlight,
   openSettings,
   unknown,
 }

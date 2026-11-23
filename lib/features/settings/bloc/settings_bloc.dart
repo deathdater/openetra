@@ -53,7 +53,10 @@ class SettingsState extends Equatable {
 }
 
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
-  SettingsBloc({required this.database}) : super(const SettingsState()) {
+  SettingsBloc({
+    required this.database,
+    this.onClearProtectedStorage,
+  }) : super(const SettingsState()) {
     on<LoadSettings>(_onLoad);
     on<UpdatePreferredLanguage>(_onUpdateLanguage);
     on<UpdateSpeechRate>(_onUpdateSpeechRate);
@@ -62,6 +65,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   }
 
   final OpenetraDatabase database;
+  final Future<void> Function()? onClearProtectedStorage;
 
   Future<void> _onLoad(LoadSettings event, Emitter<SettingsState> emit) async {
     final prefs = await database.loadPreferences();
@@ -115,6 +119,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emit,
   ) async {
     await database.deleteAllUserData();
+    await onClearProtectedStorage?.call();
     emit(SettingsState(
       preferences: state.preferences,
       isLoaded: true,

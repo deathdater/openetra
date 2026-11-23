@@ -1,6 +1,8 @@
 package com.openetra.app
 
 import com.openetra.app.camera.CameraXCaptureManager
+import com.openetra.app.emergency.EmergencyAssistancePlugin
+import com.openetra.app.flashlight.FlashlightPlugin
 import com.openetra.app.haptics.HapticsPlugin
 import com.openetra.app.mirage.MirageEnginePlugin
 import com.openetra.app.ocr.IndicOcrPlugin
@@ -18,20 +20,27 @@ class MainActivity : FlutterActivity() {
     private var indicOcrPlugin: IndicOcrPlugin? = null
     private var offlineSpeechPlugin: OfflineSpeechPlugin? = null
     private var specialistPlugin: SpecialistVisionPlugin? = null
+    private var emergencyPlugin: EmergencyAssistancePlugin? = null
+    private var flashlightPlugin: FlashlightPlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         miragePlugin = MirageEnginePlugin(applicationContext, messenger)
-        cameraManager = CameraXCaptureManager(applicationContext, this, messenger)
+        val cam = CameraXCaptureManager(applicationContext, this, messenger)
+        cameraManager = cam
         resourcePlugin = DeviceResourcePlugin(applicationContext, messenger)
         hapticsPlugin = HapticsPlugin(applicationContext, messenger)
         indicOcrPlugin = IndicOcrPlugin(applicationContext, messenger)
         offlineSpeechPlugin = OfflineSpeechPlugin(applicationContext, messenger)
         specialistPlugin = SpecialistVisionPlugin(applicationContext, messenger)
+        emergencyPlugin = EmergencyAssistancePlugin(applicationContext, messenger)
+        flashlightPlugin = FlashlightPlugin(applicationContext, cam, messenger)
     }
 
     override fun onDestroy() {
+        flashlightPlugin?.release()
+        emergencyPlugin?.release()
         miragePlugin?.release()
         cameraManager?.release()
         resourcePlugin?.release()

@@ -1,5 +1,11 @@
 # Openetra Context Changelog
 
+## [1.2.0-emergency-flashlight] - 2026-11-23
+### Added & Verified
+- Implemented Emergency Assistance (`EmergencyAssistancePlugin.kt` Android Keystore AES-256-GCM + `ACTION_DIAL`, `EmergencyAssistanceService`, `EmergencyBloc`, `EmergencyAssistanceScreen`, `EmergencyContactsScreen`, dry-run test mode, and `SettingsBloc` data wipe integration).
+- Implemented Intelligent Flashlight (`FlashlightPlugin.kt` with `TorchCallback` external-owner guard, `CameraXCaptureManager` shared `meanLuma`, `FlashlightPolicyEvaluator` hysteresis/dwell/debounce/thermal-battery/180 s limits, `IntelligentFlashlightController`, and `FlashlightSettingsScreen`).
+- Verified with `flutter analyze` (`No issues found!`) and `flutter test -r expanded` (`52/52` passing, including `emergency_assistance_test.dart` and `intelligent_flashlight_test.dart`).
+
 ## [1.1.0-assistive-phase0-1] - 2026-11-23
 ### Added & Verified
 - Authored `docs/ASSISTIVE_CONTROLS_IMPACT_ANALYSIS.md` after repository reconnaissance and `40/40` baseline test verification.

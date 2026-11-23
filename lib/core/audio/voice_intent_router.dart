@@ -33,6 +33,34 @@ class VoiceIntentRouter {
     }
 
     if (_matchesAny(normalized, const [
+      'emergency',
+      'sos',
+      'help me',
+      'आपातकाल',
+      'ಮದದ್',
+      'ತುರ್ತು',
+    ])) {
+      return VoiceIntent(
+        type: VoiceIntentType.emergencyAssistance,
+        rawTranscript: transcript,
+      );
+    }
+
+    if (_matchesAny(normalized, const [
+      'flashlight',
+      'torch',
+      'flash light',
+      'टॉर्च',
+      'ಟಾರ್ಚ್',
+    ])) {
+      return VoiceIntent(
+        type: VoiceIntentType.toggleFlashlight,
+        rawTranscript: transcript,
+        targetArgument: normalized,
+      );
+    }
+
+    if (_matchesAny(normalized, const [
       'repeat',
       'say again',
       'फिर से',

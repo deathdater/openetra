@@ -5,10 +5,21 @@ import '../../../core/audio/bloc/audio_bloc.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/resource_management/bloc/device_resource_bloc.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../emergency/bloc/emergency_bloc.dart';
+import '../../emergency/presentation/emergency_assistance_screen.dart';
+import '../../flashlight/domain/intelligent_flashlight_controller.dart';
+import '../../flashlight/presentation/flashlight_settings_screen.dart';
 import '../bloc/settings_bloc.dart';
 
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({
+    super.key,
+    this.flashlightController,
+    this.emergencyBloc,
+  });
+
+  final IntelligentFlashlightController? flashlightController;
+  final EmergencyBloc? emergencyBloc;
 
   static const List<({String locale, String label})> _languages = [
     (locale: 'en-IN', label: 'English (India)'),
@@ -129,6 +140,46 @@ class SettingsScreen extends StatelessWidget {
                     );
                   }),
                   const SizedBox(height: 20),
+                  if (emergencyBloc != null) ...[
+                    AccessibleActionTile(
+                      title: 'Emergency Assistance & Trusted Contacts',
+                      subtitle: 'Configure AES-encrypted trusted contacts & test flow',
+                      semanticHint: 'Double tap to configure emergency assistance',
+                      icon: Icons.emergency_outlined,
+                      accentBorderColor: OpenetraTheme.hazardWarning,
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => BlocProvider.value(
+                              value: emergencyBloc!,
+                              child: EmergencyAssistanceScreen(
+                                locale: prefs.preferredLanguage,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (flashlightController != null) ...[
+                    AccessibleActionTile(
+                      title: 'Intelligent Flashlight Controls',
+                      subtitle: 'Manual torch toggle and opt-in low-light auto mode',
+                      semanticHint: 'Double tap to open flashlight settings',
+                      icon: Icons.flashlight_on_outlined,
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => FlashlightSettingsScreen(
+                              controller: flashlightController!,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   AccessibleActionTile(
                     title: 'Delete All Personal Data',
                     subtitle:
