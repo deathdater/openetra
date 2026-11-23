@@ -3,6 +3,40 @@ import '../../app/theme.dart';
 
 enum OpenetraBadgeTone { neutral, success, warning, error, info, accent }
 
+/// Official Openetra brand logo mark rendered cleanly from local offline asset.
+class OpenetraBrandLogo extends StatelessWidget {
+  const OpenetraBrandLogo({
+    super.key,
+    this.size = 40,
+    this.borderRadius = 10,
+  });
+
+  final double size;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = OpenetraTheme.paletteOf(context);
+    return ExcludeSemantics(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(borderRadius),
+          border: Border.all(color: palette.border, width: 1.2),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Image.asset(
+          'assets/branding/openetra_logo.png',
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+        ),
+      ),
+    );
+  }
+}
+
 /// Accessible semantic section header for predictable TalkBack landmark jumps.
 class OpenetraSectionHeader extends StatelessWidget {
   const OpenetraSectionHeader({

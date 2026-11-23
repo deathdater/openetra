@@ -4,8 +4,6 @@ import '../../../core/audio/bloc/audio_bloc.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
 import '../../../shared/widgets/openetra_components.dart';
-import '../../dial/models/dial_menu_node.dart';
-import '../../dial/presentation/widgets/dial_focus_glyph.dart';
 import '../../settings/bloc/settings_bloc.dart';
 
 class OnboardingScreen extends StatelessWidget {
@@ -28,12 +26,7 @@ class OnboardingScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                const ExcludeSemantics(
-                  child: DialFocusGlyph(
-                    glyph: DialGlyphKind.eyeIris,
-                    size: 46,
-                  ),
-                ),
+                const OpenetraBrandLogo(size: 56, borderRadius: 14),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Semantics(

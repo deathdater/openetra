@@ -30,6 +30,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/branding/openetra_logo.png
     - assets/models/mirage.cact
     - assets/models/tessdata/hin.traineddata
     - assets/models/tessdata/mar.traineddata

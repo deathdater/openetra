@@ -121,7 +121,14 @@ class _AssistiveDialPageState extends State<AssistiveDialPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Openetra'),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            OpenetraBrandLogo(size: 32, borderRadius: 8),
+            SizedBox(width: 10),
+            Text('Openetra'),
+          ],
+        ),
         actions: [
           Semantics(
             button: true,
