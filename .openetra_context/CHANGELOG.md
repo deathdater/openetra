@@ -1,5 +1,10 @@
 # Openetra Context Changelog
 
+## [0.4.0-phase3] - 2026-11-23
+### Added
+- Implemented `SceneUnderstandingEngine` with entity deduplication, deterministic relative zones, relation confidence filtering, temporal scene diff, and accessibility speech composition.
+- Implemented `ContextualQueryResolver` for offline follow-up questions with freshness validation and zero pixel retention.
+
 ## [0.3.0-phase2] - 2026-11-23
 ### Added
 - Installed `ndk;27.0.12077973` & `cmake;3.22.1` and vendored verified Cactus `4.1.4` static libraries + `mirage.cact`.

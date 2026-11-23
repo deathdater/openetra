@@ -18,6 +18,8 @@ import '../features/model_manager/bloc/model_manager_bloc.dart';
 import '../features/object_memory/bloc/object_memory_bloc.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/scene_understanding/bloc/scene_understanding_bloc.dart';
+import '../features/scene_understanding/domain/contextual_query_resolver.dart';
+import '../features/scene_understanding/domain/scene_understanding_engine.dart';
 import '../features/settings/bloc/settings_bloc.dart';
 import '../features/smart_reader/bloc/smart_reader_bloc.dart';
 import '../features/vision_explorer/bloc/vision_bloc.dart';
@@ -106,7 +108,17 @@ class OpenetraDependencies {
     final resourceBloc = DeviceResourceBloc(resourceManager: resMgr);
     final voiceBloc = VoiceAssistantBloc();
     final visionBloc = VisionBloc(orchestrator: orchestrator, cameraSource: cam);
-    final sceneBloc = SceneUnderstandingBloc();
+    const sceneEngine = SceneUnderstandingEngine();
+    final queryResolver = ContextualQueryResolver();
+    final sceneBloc = SceneUnderstandingBloc(
+      builder: (obs, prev) {
+        final desc = sceneEngine.build(obs, previousGraph: prev);
+        queryResolver.recordGraph(desc.sceneGraph);
+        return desc;
+      },
+      followUpResolver: (query, graph) =>
+          queryResolver.answerFollowUp(query, fallbackGraph: graph),
+    );
     final hazardBloc = HazardDetectionBloc();
     final readerBloc = SmartReaderBloc();
     final objectBloc = ObjectMemoryBloc(database: database);
