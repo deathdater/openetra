@@ -66,7 +66,11 @@ class ContextualQueryResolver {
       return _describeZoneMatches('at ground level', graph.groundLevelNodes);
     }
 
-    if (q.contains('text') || q.contains('sign') || q.contains('read')) {
+    if (q.contains('text') ||
+        q.contains('written') ||
+        q.contains('read') ||
+        q.contains('what does') ||
+        q.contains('sign say')) {
       if (graph.readableTexts.isEmpty) {
         return 'No readable Latin text was spotted in the last frame.';
       }

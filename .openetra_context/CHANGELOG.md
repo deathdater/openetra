@@ -1,5 +1,12 @@
 # Openetra Context Changelog
 
+## [0.6.0-mvp-vertical-slice] - 2026-11-23
+### Added & Verified
+- Authored 24 passing host unit, BLoC, SQLite, safety, OCR, currency/object-memory, and accessibility widget tests plus `MirageNativeInstrumentedTest.kt`.
+- Resolved `compileSdk 36` / Kotlin `2.2.20` compatibility and macOS ExFAT AppleDouble intermediate conflict via APFS buildDir redirection.
+- Built `app-debug.apk` (`android-arm64`) bundling `libopenetra_mirage.so` + `mirage.cact` without `INTERNET` permission in production manifest.
+- Executed live native Mirage JNI inference on `Medium_Phone_API_35` (`arm64-v8a`, Android 15), verified `MainActivity` cold launch, recorded real emulator timings in `docs/PERFORMANCE_BENCHMARKS.md`, and updated `docs/IMPLEMENTATION_STATUS.md`.
+
 ## [0.5.0-phase4] - 2026-11-23
 ### Added
 - Implemented `HazardTaxonomy`, `IoUTracker`, and `HazardIntelligenceEngine` with 5-factor confidence separation and cooldown deduplication.

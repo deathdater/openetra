@@ -26,8 +26,19 @@
 
 ---
 
-## 3. Android ARM64 Emulator Measurements
-*(To be populated in Milestone `v0.6.0` after executing live `Medium_Phone_API_35` ARM64 APK verification.)*
+## 3. Measured Android ARM64 Emulator Verification (`Medium_Phone_API_35`, Android 15, `arm64-v8a`, 4 CPU threads)
+*(Direct reproducible measurement from `MirageNativeInstrumentedTest` running `libopenetra_mirage.so` + `libcactus.a` + SHA-256-verified `mirage.cact` inside Android 15 `arm64-v8a` emulator; emulator CPU scheduling overhead differs from physical SoC NPU/CPU hardware.)*
+
+| Metric / Workload | Measured Result | Verified Output |
+|---|---:|---|
+| Bundled `mirage.cact` SHA-256 check (`21,611,043 B`) | Pass | `4249a0f7515272ff76b9414bec17d7e7daf84b15b66c7fb4f17fce1e66f9f237` |
+| Native `cactus_load` (`ANDROID_MIRAGE_LOAD_MS`) | `57.09 ms` | `models_mask = 4` (`CACTUS_VISION`) |
+| COCO `231049` (`427x640`, selective scene+objects+text+relations) — Call 1 | `961.40 ms` | `suburban street`, `stop sign` (`0.639`), `ARRET` (`0.870`) |
+| COCO `231049` (`427x640`, selective scene+objects+text+relations) — Call 2 | `1431.23 ms` | `meanLuma=106.2`, `laplacianVar=4684.2` |
+| COCO `139` (`640x426`, selective scene+objects+text+relations) | `1429.90 ms` | `living room`, 11 `chair` detections (`id=6`), `dining table`, `rug` |
+| Cold Flutter App Launch (`com.openetra.app/.MainActivity`) | `5425 ms` | Zero uncaught exceptions; Dart VM initialized cleanly |
+
+---
 
 ## 4. Physical Android Device Measurements
-*(Pending physical entry-level, mid-range, and flagship Android device testing in Phase 7.)*
+*(Pending physical entry-level, mid-range, and flagship Android device battery/thermal/latency testing in Phase 7.)*

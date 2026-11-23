@@ -50,9 +50,10 @@ Consequently, there is no legacy functionality to regress or preserve, and Opene
 1. **Java 21 vs. Flutter 3.22 Default Gradle Wrapper:**
    - `flutter create` in Flutter 3.22.3 generates `gradle-7.6.3` and AGP `7.3.0`, which throw `Unsupported class file major version 65` on OpenJDK 21.
    - **Mitigation:** Immediately upgrade Gradle wrapper to `8.7`, AGP to `8.5.2`, Kotlin to `1.9.24`, and compile options to Java 17 bytecode.
-2. **Dart `3.4.4` Package Compatibility:**
-   - Newer package major versions (e.g., `flutter_bloc: ^9.x`, `camera: ^0.11.1+`) may require Dart `>=3.5.0` or `>=3.6.0`.
-   - **Mitigation:** Pin tested versions compatible with Dart `3.4.4` (`flutter_bloc: ^8.1.6`, `sqflite: ^2.3.3+1`, `flutter_tts: ^4.0.2`).
+2. **Dart `3.4.4` & Android Plugin Compatibility (`compileSdk 36`, Kotlin `2.2.20`):**
+   - Newer package major versions (e.g., `flutter_bloc: ^9.x`) require newer Dart SDKs; additionally `flutter_tts: ^4.0.2` resolved `4.2.5`, which pulls `kotlin-stdlib-2.2.20` and specifies `compileSdk 36`.
+   - **Mitigation:** Pin Dart `3.4.4`-compatible packages (`flutter_bloc: ^8.1.6`, `sqflite: ^2.3.3+1`, `flutter_tts: ^4.0.2`), set `compileSdk = 36` (already installed in Android SDK) and Kotlin Gradle plugin `2.2.20` in `android/settings.gradle`.
+   - **macOS ExFAT External Volume Build Note:** Because `/Volumes/Dater 5TB` is ExFAT (`fskit`), macOS writes `com.apple.provenance` AppleDouble `._*` sidecar files when Gradle creates resource/intermediate directories, which breaks `:app:parseDebugLocalResources`. `android/build.gradle` and `android/app/build.gradle` relocate Gradle `buildDir` and CMake `buildStagingDirectory` to native APFS `java.io.tmpdir` on macOS `/Volumes/` paths while copying final APKs back to `build/app/outputs/flutter-apk/`.
 3. **NDK C++ Standard Library Linkage for `libcactus.a`:**
    - Symbol inspection (`nm -u android-arm64/libcactus.a`) proved that Cactus links Android NDK LLVM `libc++` (`std::__ndk1::basic_string`, `std::__ndk1::locale`, `pthread_create`, `mmap`, `log`, `expf`).
    - **Mitigation:** Compile our JNI shared library (`libopenetra_mirage.so`) with `ANDROID_STL=c++_shared` (or `c++_static`), link `log`, `android`, `m`, `dl`, and enable 16 KB page alignment (`-Wl,-z,max-page-size=16384`) for Android 15+ compliance.

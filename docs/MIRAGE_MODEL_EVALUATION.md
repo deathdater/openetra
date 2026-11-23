@@ -29,4 +29,9 @@ Measured locally using `harness/mirage_probe` compiled against Cactus `4.1.4` (`
 1. **Mask Omission Cuts Latency:** Omitting `mask` unless contour extraction is strictly needed saves ~100–200 ms per frame on CPU (`174.7 ms` vs `372.0 ms` polygons).
 2. **Text-Only and Form Requests are Fast:** `text` only (`136.4 ms`) and `form` (`53.7 ms`) justify dedicated lightweight `SmartReader` / confirmation query profiles.
 3. **Entity Grouping & Relation Filtering Required:** Mirage shares entity `id` across multiple boxes (11 chairs with `id: 6` in `000000000139`), and occasionally outputs implausible relations (`rug on table`) or `scene: null`. `SceneUnderstandingEngine` handles deduplication and defensive parsing.
-4. **Target Android ARM64 Emulator & Device Validation:** Real Android ARM64 JNI load/inference metrics will be recorded here in Milestone `v0.6.0` after APK testing on `Medium_Phone_API_35`.
+4. **Android ARM64 Emulator Verification (`Medium_Phone_API_35`, Android 15, `arm64-v8a`):**
+   - Executed `MirageNativeInstrumentedTest` directly against `libopenetra_mirage.so` + `libcactus.a` + `mirage.cact` inside Android 15 `arm64-v8a` emulator (4 threads):
+     - SHA-256 check passed (`4249a0f7515272ff76b9414bec17d7e7daf84b15b66c7fb4f17fce1e66f9f237`), `cactus_load`: `57.09 ms` (`mask = 4`).
+     - `stop_sign_231049.jpg`: `961.40 ms` (call 1) / `1431.23 ms` (call 2); detected `suburban street`, `stop sign` (`0.639`), `ARRET` (`0.870`), `attached_to`, `standing_on`.
+     - `living_room_139.jpg`: `1429.90 ms`; detected `living room`, 11 `chair` instances sharing `id: 6`, `dining table`, `rug`.
+     - Note: `Medium_Phone_API_35` emulator numbers reflect virtualized ARM64 execution; physical device NPU/CPU latency, RAM, and battery benchmarks remain Phase 7 work.

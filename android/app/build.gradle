@@ -25,7 +25,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace = "com.openetra.app"
-    compileSdk = 35
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -61,6 +61,10 @@ android {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
             version "3.22.1"
+            if (System.getProperty("os.name").toLowerCase().contains("mac") &&
+                rootProject.projectDir.absolutePath.startsWith("/Volumes/")) {
+                buildStagingDirectory = new File(System.getProperty("java.io.tmpdir"), "openetra_android_cxx")
+            }
         }
     }
 
@@ -87,4 +91,28 @@ dependencies {
 
 flutter {
     source = "../.."
+}
+
+if (System.getProperty("os.name").toLowerCase().contains("mac") &&
+    rootProject.projectDir.absolutePath.startsWith("/Volumes/")) {
+    afterEvaluate {
+        tasks.matching { it.name == "assembleDebug" || it.name == "assembleRelease" }.configureEach {
+            doLast {
+                def srcDir = new File("${project.buildDir}/outputs/flutter-apk")
+                if (srcDir.exists()) {
+                    def dstDir = new File(rootProject.projectDir.parentFile, "build/app/outputs/flutter-apk")
+                    dstDir.mkdirs()
+                    srcDir.listFiles()?.each { f ->
+                        if (f.name.endsWith(".apk") || f.name.endsWith(".sha1")) {
+                            java.nio.file.Files.copy(
+                                f.toPath(),
+                                new File(dstDir, f.name).toPath(),
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

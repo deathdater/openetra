@@ -5,7 +5,13 @@ allprojects {
     }
 }
 
-rootProject.buildDir = "../build"
+def isMacExternalVolume = System.getProperty("os.name").toLowerCase().contains("mac") &&
+    rootProject.projectDir.absolutePath.startsWith("/Volumes/")
+
+rootProject.buildDir = isMacExternalVolume
+    ? new File(System.getProperty("java.io.tmpdir"), "openetra_android_build")
+    : file("../build")
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
