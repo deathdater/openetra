@@ -143,6 +143,7 @@ class OpenetraDependencies {
     ProtectedContactStore? contactStore,
     FlashlightGateway? flashlightGateway,
     LocalLlmEngine? localLlmEngine,
+    PermissionGateway? permissionGateway,
     bool enablePlatformTts = true,
   }) async {
     final registry = AIModelRegistry();
@@ -234,7 +235,12 @@ class OpenetraDependencies {
     final currencyService = CurrencyRecognitionService(
       classifier: currencyClassifier,
     );
-    final permissionCoordinator = PermissionCoordinator();
+    final permissionCoordinator = PermissionCoordinator(
+      gateway: permissionGateway ??
+          (enablePlatformTts
+              ? const PlatformPermissionGateway()
+              : DefaultInMemoryPermissionGateway()),
+    );
     final cameraResourceManager = CameraResourceManager(cameraSource: cam);
     final audioArbitrator = AudioArbitrator(
       audioBloc: audioBloc,
@@ -528,14 +534,199 @@ class OpenetraApp extends StatefulWidget {
   State<OpenetraApp> createState() => _OpenetraAppState();
 }
 
-class _OpenetraAppState extends State<OpenetraApp> {
+class _OpenetraAppState extends State<OpenetraApp> with WidgetsBindingObserver {
   late bool _showHome;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  bool _isPermissionFlowActive = false;
+  DateTime? _lastPermissionFlowCompletedAt;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _showHome = widget.skipOnboarding ||
         widget.deps.settingsBloc.state.preferences.onboardingCompleted;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndPromptPermissions(isResume: false);
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_isPermissionFlowActive) return;
+      final completedAt = _lastPermissionFlowCompletedAt;
+      if (completedAt != null &&
+          DateTime.now().difference(completedAt) <
+              const Duration(milliseconds: 1500)) {
+        return;
+      }
+      _checkAndPromptPermissions(isResume: true);
+    }
+  }
+
+  IconData _iconForPermission(OpenetraPermission p) {
+    return switch (p) {
+      OpenetraPermission.camera => Icons.camera_alt_outlined,
+      OpenetraPermission.microphone => Icons.mic_outlined,
+      OpenetraPermission.notifications => Icons.notifications_outlined,
+      OpenetraPermission.overlay => Icons.layers_outlined,
+    };
+  }
+
+  Future<void> _checkAndPromptPermissions({required bool isResume}) async {
+    if (_isPermissionFlowActive || !mounted) return;
+    _isPermissionFlowActive = true;
+    try {
+      final relevant = List<OpenetraPermission>.from(
+        PermissionCoordinator.coreStartupPermissions,
+      );
+      if (widget.deps.floatingCompanionBloc.state.config.enabled) {
+        relevant.add(OpenetraPermission.overlay);
+      }
+
+      final missing = await widget.deps.permissionCoordinator
+          .checkMissingPermissions(permissions: relevant);
+      if (missing.isEmpty || !mounted) return;
+
+      final navContext = _navigatorKey.currentContext;
+      if (navContext == null || !navContext.mounted) return;
+
+      final names = missing
+          .map((m) => PermissionCoordinator.displayNameFor(m.permission))
+          .join(', ');
+      final spokenReasons = missing
+          .map(
+            (m) =>
+                '${PermissionCoordinator.displayNameFor(m.permission)}: ${m.explanation}',
+          )
+          .join(' ');
+      widget.deps.coordinator.speakPlainNotice(
+        'Openetra needs the following permissions: $names. $spokenReasons',
+      );
+
+      final hasPermanentlyDenied =
+          missing.any((m) => m.requiresSettings);
+      final requestable =
+          missing.where((m) => !m.isPermanentlyDenied).toList();
+
+      final choice = await showDialog<String>(
+        context: navContext,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          final textTheme = Theme.of(dialogContext).textTheme;
+          final palette = OpenetraTheme.paletteOf(dialogContext);
+          return AlertDialog(
+            title: const Text('Permissions Required'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Openetra processes everything on-device and needs these permissions to work reliably:',
+                    style: textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: OpenetraSpacing.md),
+                  for (final rec in missing) ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          _iconForPermission(rec.permission),
+                          color: palette.primary,
+                          size: 22,
+                        ),
+                        const SizedBox(width: OpenetraSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                PermissionCoordinator.displayNameFor(
+                                  rec.permission,
+                                ),
+                                style: textTheme.titleSmall,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                rec.explanation,
+                                style: textTheme.bodySmall,
+                              ),
+                              if (rec.isPermanentlyDenied) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Blocked in Android Settings — tap Open Settings to allow.',
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: palette.warning,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: OpenetraSpacing.md),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop('later'),
+                child: const Text('Not Now'),
+              ),
+              if (hasPermanentlyDenied)
+                OutlinedButton(
+                  onPressed: () => Navigator.of(dialogContext).pop('settings'),
+                  child: const Text('Open Settings'),
+                ),
+              if (requestable.isNotEmpty)
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop('allow'),
+                  child: const Text('Allow Permissions'),
+                ),
+            ],
+          );
+        },
+      );
+
+      if (!mounted) return;
+      if (choice == 'allow' && requestable.isNotEmpty) {
+        final updated = await widget.deps.permissionCoordinator
+            .requestMissingPermissions(requestable);
+        final stillMissing = updated.where((r) => !r.isGranted).toList();
+        if (stillMissing.isEmpty && !hasPermanentlyDenied) {
+          widget.deps.coordinator.speakPlainNotice(
+            'All required permissions granted. Openetra is ready.',
+          );
+        } else {
+          final remainingNames = {
+            ...stillMissing.map(
+              (r) => PermissionCoordinator.displayNameFor(r.permission),
+            ),
+            ...missing
+                .where((m) => m.isPermanentlyDenied)
+                .map((r) => PermissionCoordinator.displayNameFor(r.permission)),
+          }.join(', ');
+          widget.deps.coordinator.speakPlainNotice(
+            'Permissions still missing: $remainingNames. You can grant them anytime when you return to Openetra or in Android Settings.',
+          );
+        }
+      } else if (choice == 'settings') {
+        await widget.deps.permissionCoordinator.openSystemSettings();
+      }
+    } finally {
+      _isPermissionFlowActive = false;
+      _lastPermissionFlowCompletedAt = DateTime.now();
+    }
   }
 
   @override
@@ -563,6 +754,7 @@ class _OpenetraAppState extends State<OpenetraApp> {
         buildWhen: (prev, curr) => prev.themeMode != curr.themeMode,
         builder: (context, settingsState) {
           return MaterialApp(
+            navigatorKey: _navigatorKey,
             title: 'Openetra',
             debugShowCheckedModeBanner: false,
             theme: OpenetraTheme.buildLightTheme(),

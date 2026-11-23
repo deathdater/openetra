@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:equatable/equatable.dart';
+import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 
 enum OpenetraPermission {
   camera,
@@ -28,6 +30,11 @@ class PermissionStatusRecord extends Equatable {
   final String explanation;
 
   bool get isGranted => state == PermissionGrantState.granted;
+  bool get isPermanentlyDenied =>
+      state == PermissionGrantState.permanentlyDenied;
+  bool get requiresSettings =>
+      state == PermissionGrantState.permanentlyDenied ||
+      state == PermissionGrantState.revoked;
 
   @override
   List<Object?> get props => [permission, state, explanation];
@@ -38,10 +45,73 @@ class PermissionStatusRecord extends Equatable {
 abstract class PermissionGateway {
   Future<PermissionGrantState> check(OpenetraPermission permission);
   Future<PermissionGrantState> request(OpenetraPermission permission);
+  Future<bool> openSystemSettings();
+}
+
+/// Live Android/iOS permission gateway backed by `permission_handler`.
+/// Fails safely to `PermissionGrantState.unknown` on unsupported hosts (e.g. VM tests).
+class PlatformPermissionGateway implements PermissionGateway {
+  const PlatformPermissionGateway();
+
+  ph.Permission _toPlatform(OpenetraPermission p) {
+    return switch (p) {
+      OpenetraPermission.camera => ph.Permission.camera,
+      OpenetraPermission.microphone => ph.Permission.microphone,
+      OpenetraPermission.notifications => ph.Permission.notification,
+      OpenetraPermission.overlay => ph.Permission.systemAlertWindow,
+    };
+  }
+
+  PermissionGrantState _mapStatus(ph.PermissionStatus status) {
+    if (status.isGranted || status.isLimited || status.isProvisional) {
+      return PermissionGrantState.granted;
+    }
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      return PermissionGrantState.permanentlyDenied;
+    }
+    return PermissionGrantState.denied;
+  }
+
+  @override
+  Future<PermissionGrantState> check(OpenetraPermission permission) async {
+    try {
+      final status = await _toPlatform(permission).status;
+      return _mapStatus(status);
+    } on MissingPluginException {
+      return PermissionGrantState.unknown;
+    } catch (_) {
+      return PermissionGrantState.unknown;
+    }
+  }
+
+  @override
+  Future<PermissionGrantState> request(OpenetraPermission permission) async {
+    try {
+      final status = await _toPlatform(permission).request();
+      return _mapStatus(status);
+    } on MissingPluginException {
+      return PermissionGrantState.unknown;
+    } catch (_) {
+      return PermissionGrantState.denied;
+    }
+  }
+
+  @override
+  Future<bool> openSystemSettings() async {
+    try {
+      return await ph.openAppSettings();
+    } on MissingPluginException {
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 class DefaultInMemoryPermissionGateway implements PermissionGateway {
-  DefaultInMemoryPermissionGateway([Map<OpenetraPermission, PermissionGrantState>? initial]) {
+  DefaultInMemoryPermissionGateway([
+    Map<OpenetraPermission, PermissionGrantState>? initial,
+  ]) {
     if (initial != null) {
       _states.addAll(initial);
     }
@@ -65,6 +135,9 @@ class DefaultInMemoryPermissionGateway implements PermissionGateway {
   @override
   Future<PermissionGrantState> request(OpenetraPermission permission) async =>
       _states[permission] ?? PermissionGrantState.denied;
+
+  @override
+  Future<bool> openSystemSettings() async => true;
 }
 
 /// Contextual permission tracking, user-friendly accessible explanations, and
@@ -87,6 +160,22 @@ class PermissionCoordinator {
   Stream<PermissionStatusRecord> get onPermissionChanged =>
       _revocationController.stream;
 
+  /// Core runtime permissions checked on every app start and resume.
+  static const List<OpenetraPermission> coreStartupPermissions = [
+    OpenetraPermission.camera,
+    OpenetraPermission.microphone,
+    OpenetraPermission.notifications,
+  ];
+
+  static String displayNameFor(OpenetraPermission p) {
+    return switch (p) {
+      OpenetraPermission.camera => 'Camera',
+      OpenetraPermission.microphone => 'Microphone',
+      OpenetraPermission.notifications => 'Notifications',
+      OpenetraPermission.overlay => 'Display Over Other Apps',
+    };
+  }
+
   static String explanationFor(OpenetraPermission p) {
     return switch (p) {
       OpenetraPermission.camera =>
@@ -107,8 +196,7 @@ class PermissionCoordinator {
     final prev = _cached[p];
     var next = await _gateway.check(p);
     if (prev == PermissionGrantState.granted &&
-        (next == PermissionGrantState.denied ||
-            next == PermissionGrantState.permanentlyDenied)) {
+        next == PermissionGrantState.denied) {
       next = PermissionGrantState.revoked;
     }
     _cached[p] = next;
@@ -121,6 +209,22 @@ class PermissionCoordinator {
       _revocationController.add(rec);
     }
     return rec;
+  }
+
+  /// Checks all requested permissions and returns those that are missing
+  /// (denied, permanentlyDenied, or revoked). Ignores `unknown` states on
+  /// non-mobile hosts.
+  Future<List<PermissionStatusRecord>> checkMissingPermissions({
+    List<OpenetraPermission> permissions = coreStartupPermissions,
+  }) async {
+    final missing = <PermissionStatusRecord>[];
+    for (final p in permissions) {
+      final rec = await refresh(p);
+      if (!rec.isGranted && rec.state != PermissionGrantState.unknown) {
+        missing.add(rec);
+      }
+    }
+    return missing;
   }
 
   Future<PermissionStatusRecord> ensureOrRequest(OpenetraPermission p) async {
@@ -136,6 +240,19 @@ class PermissionCoordinator {
     _revocationController.add(rec);
     return rec;
   }
+
+  /// Requests each missing permission sequentially and returns the updated records.
+  Future<List<PermissionStatusRecord>> requestMissingPermissions(
+    List<PermissionStatusRecord> missing,
+  ) async {
+    final results = <PermissionStatusRecord>[];
+    for (final item in missing) {
+      results.add(await ensureOrRequest(item.permission));
+    }
+    return results;
+  }
+
+  Future<bool> openSystemSettings() => _gateway.openSystemSettings();
 
   Future<void> markRevoked(OpenetraPermission p) async {
     _cached[p] = PermissionGrantState.revoked;
