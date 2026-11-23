@@ -1,5 +1,11 @@
 # Openetra Context Changelog
 
+## [1.5.0-assistive-controls-verified] - 2026-11-23
+### Added & Verified
+- Authored `AssistiveControlsInstrumentedTest.kt` and verified all 3 Android instrumentation suites on `Medium_Phone_API_35` (`arm64-v8a`, Android 15): `AssistiveControlsInstrumentedTest` (3/3 in `0.21 s`: Keystore AES-256-GCM, LiteRT `1.4.2` hand landmarks load `88 ms` / inference `34 ms`, `FloatingOrbView` + `specialUse` FGS), `MirageNativeInstrumentedTest` (1/1 in `1.013 s`), and `IndicAndSpecialistInstrumentedTest` (1/1 in `0.913 s`).
+- Built R8-minified `app-release.apk` (`148,818,998` bytes), verified zero `INTERNET`/`ACCESS_NETWORK_STATE`/`CALL_PHONE` permissions via `aapt2`, and verified cold launch (`1975 ms`, zero fatal errors) on Android 15 ARM64 emulator.
+- Authored all 14 remaining Section 15 documentation files under `docs/` (15/15 total) and passed `flutter analyze` (`No issues found!`) + `flutter test -r expanded` (`58/58` passing).
+
 ## [1.4.0-floating-companion] - 2026-11-23
 ### Added & Verified
 - Implemented native Android `FloatingCompanionService` (`specialUse` foreground service + `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`), `FloatingOrbView` (10-state calm glow, zero idle/paused/reduced-motion animation, TalkBack semantics, snap-to-edge), `FloatingCompanionPlugin`, and `MainActivity.onNewIntent` forwarding.

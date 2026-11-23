@@ -1,6 +1,6 @@
 # Openetra Implementation Status
 
-**Current Version:** `1.0.0-release-candidate`  
+**Current Version:** `1.5.0-assistive-controls-verified`  
 **Last Updated:** 2026-11-23
 
 | Area / Phase | Status | Notes |
@@ -14,3 +14,4 @@
 | **Phase 5: All-8-Language Indic OCR & `sherpa-onnx` VAD/ASR** | **Completed & Emulator-Verified (`v1.0.0`)** | Bundled & SHA-256-verified all 7 Indic `tessdata_fast` models (`hin`, `mar`, `kan`, `tam`, `tel`, `mal`, `ben`), ML Kit Devanagari `16.0.1`, `silero_vad.int8.onnx` (`sherpa-onnx 2.0.3`), `OpenetraLocalizer` (EN/HI/KN), and 8-locale voice routing — all verified character-exact on `Medium_Phone_API_35`; external `IndicConformer` packs ready via `loadAsrPack`. |
 | **Phase 6: Currency Fusion, Barcodes, Embeddings, LiteRT Depth/Currency Slots & Shopping** | **Implemented & Emulator-Verified (`v1.0.0`); Weights Pending** | SQLite v2 `local_products`, ML Kit Barcode `17.3.0` (`53 ms`), 96-dim embeddings (`21.03 ms` + camera registration flow), Mirage `form` (`107.71 ms`) + OCR fusion, `ShoppingScreen`, and LiteRT `1.4.2` XNNPACK (`1.02 ms` verified) slots (`loadCurrencyModel` / `loadDepthModel`) active; `.tflite` banknote & depth weights pending training/evaluation. |
 | **Release Candidate Hardening & Verification (`v1.0.0`)** | **Emulator-Verified; Physical Devices Pending** | 40/40 host tests passing; R8 `app-release.apk` (`142,993,414 B`) verified zero-`INTERNET` / zero-`ACCESS_NETWORK_STATE` via `aapt2`, cold-launched in `2560 ms` on Android 15 emulator with 0 fatal errors; `MirageNativeInstrumentedTest` (`1.305 s`) & `IndicAndSpecialistInstrumentedTest` (`1.75 s`) passed. Physical Android phones & blind-user field trials pending. |
+| **Assistive Controls & Floating Companion (`v1.5.0`)** | **Implemented & Emulator-Verified; Physical Devices Pending** | Shared router/orchestrator/camera-audio arbiters (SQLite v3), Emergency Assistance (Android Keystore AES-256-GCM + `ACTION_DIAL` + dry-run), Intelligent Flashlight (`TorchCallback` + shared `meanLuma` + hysteresis/dwell/thermal/battery/180 s cutoff), Custom Hand Gesture Automation (`hand_landmarks_detector.tflite` on LiteRT `1.4.2` XNNPACK, `34 ms` inference on Android 15 emulator), Floating Assistive Companion (`specialUse` FGS + 10-state `FloatingOrbView` + Category A/C policy), and 15/15 Section 15 docs. 58/58 host tests + 5/5 emulator instrumentation tests passing; `app-release.apk` (`148,818,998 B`) zero-network verified and cold-launched in `1975 ms`. See `docs/ASSISTIVE_CONTROLS_IMPLEMENTATION_STATUS.md`. |
