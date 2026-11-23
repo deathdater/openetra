@@ -410,7 +410,8 @@ class OpenetraDependencies {
         requiresCamera: true,
         supportsParameter: true,
       ),
-      handler: (ctx) => coordinator.runFindObject(ctx.argument ?? 'wallet'),
+      handler: (ctx) =>
+          coordinator.runFindRegisteredObjects(itemName: ctx.argument),
     );
     router.register(
       spec: const AssistiveActionSpec(

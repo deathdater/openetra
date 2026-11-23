@@ -6,6 +6,7 @@ import '../../../core/domain/entities/entities.dart';
 import '../../../core/inference/model_provider.dart';
 import '../../../core/inference/specialist/native_specialist_providers.dart';
 import '../../../core/storage/openetra_database.dart';
+import '../../scene_understanding/domain/registered_object_scene_matcher.dart';
 
 abstract class ObjectMemoryEvent extends Equatable {
   const ObjectMemoryEvent();
@@ -169,58 +170,48 @@ class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
   ) async {
     final target = event.objectName.trim().toLowerCase();
     final obs = event.observation;
+    final currentProfiles = state.profiles.isNotEmpty
+        ? state.profiles
+        : await database.listPersonalObjects();
+
     if (obs == null) {
-      final profiles = state.profiles.where(
-        (p) => p.name.toLowerCase().contains(target),
+      final profiles = currentProfiles.where(
+        (p) => RegisteredObjectSceneMatcher.matchesObjectLabel(p.name, target),
       );
       final historyNote = profiles.isNotEmpty && profiles.first.lastSeenSetting != null
           ? ' Last seen in ${profiles.first.lastSeenSetting}.'
           : '';
       emit(ObjectMemoryState(
-        profiles: state.profiles,
+        profiles: currentProfiles,
         lastSearchResult: 'Capture a scene to search for $target.$historyNote',
       ));
       return;
     }
 
-    final matches = obs.objects.where((o) {
-      final n = o.name.toLowerCase();
-      return n == target || n.contains(target) || target.contains(n);
-    }).toList();
-
-    if (matches.isEmpty) {
-      emit(ObjectMemoryState(
-        profiles: state.profiles,
-        lastSearchResult:
-            'Could not find $target in the current camera view. Try panning slowly.',
-      ));
-      return;
-    }
-
-    String zone(BoundingBox b) {
-      final cx = b.centerX;
-      if (cx < 200) return 'far left';
-      if (cx < 380) return 'left';
-      if (cx <= 620) return 'center';
-      if (cx <= 800) return 'right';
-      return 'far right';
-    }
-
-    final matchingProfile = state.profiles.where(
-      (p) => p.name.toLowerCase().contains(target),
+    final matchingProfile = currentProfiles.where(
+      (p) => RegisteredObjectSceneMatcher.matchesObjectLabel(p.name, target),
     );
     List<List<double>> storedVecs = const [];
     if (matchingProfile.isNotEmpty) {
       storedVecs = await database.getObjectEmbeddings(matchingProfile.first.id);
     }
 
-    // Score candidates with visual embedding similarity if available.
-    ObjectDetection bestMatch = matches.first;
+    // Check label matches first (token + synonym aware)
+    final labelMatches = obs.objects
+        .where((o) => RegisteredObjectSceneMatcher.matchesObjectLabel(target, o.name))
+        .toList();
+
+    // Score candidates with visual embedding similarity across label matches,
+    // or across ALL detections if saved embeddings exist and Mirage used a different label.
+    ObjectDetection? bestMatch;
     double bestCosine = -1.0;
+    final candidatesForEmbed =
+        labelMatches.isNotEmpty ? labelMatches : obs.objects;
+
     if (event.frame != null &&
         embeddingProvider != null &&
         storedVecs.isNotEmpty) {
-      for (final candidate in matches) {
+      for (final candidate in candidatesForEmbed) {
         final candVec = await embeddingProvider!.computeEmbedding(
           event.frame!,
           candidate.boundingBox,
@@ -236,10 +227,39 @@ class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
       }
     }
 
-    if (matches.length > 1 && bestCosine < 0.80) {
+    // Accept visual-only match when similarity >= 0.78, or fall back to labelMatches.
+    final List<ObjectDetection> matches;
+    if (labelMatches.isNotEmpty) {
+      matches = labelMatches;
+      bestMatch ??= labelMatches.first;
+    } else if (bestMatch != null && bestCosine >= 0.78) {
+      matches = [bestMatch];
+    } else {
+      matches = const [];
+    }
+
+    if (matches.isEmpty || bestMatch == null) {
+      emit(ObjectMemoryState(
+        profiles: currentProfiles,
+        lastSearchResult:
+            'Could not find $target in the current camera view. Try panning slowly.',
+      ));
+      return;
+    }
+
+    String zone(BoundingBox b) {
+      final cx = b.centerX;
+      if (cx < 200) return 'far left';
+      if (cx < 380) return 'left';
+      if (cx <= 620) return 'center';
+      if (cx <= 800) return 'right';
+      return 'far right';
+    }
+
+    if (matches.length > 1 && bestCosine < 0.78) {
       final locations = matches.take(3).map((m) => zone(m.boundingBox)).join(', ');
       emit(ObjectMemoryState(
-        profiles: state.profiles,
+        profiles: currentProfiles,
         lastSearchResult:
             'I see ${matches.length} possible matches for $target at: $locations. Please confirm which one you want.',
       ));
@@ -257,14 +277,17 @@ class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
       );
     }
 
-    final embedNote = bestCosine >= 0.78
+    final displayName = matchingProfile.isNotEmpty
+        ? matchingProfile.first.name
+        : bestMatch.name;
+    final embedNote = bestCosine >= 0.76
         ? ', visual appearance similarity ${(bestCosine * 100).round()}%'
         : '';
     final list = await database.listPersonalObjects();
     emit(ObjectMemoryState(
       profiles: list,
       lastSearchResult:
-          'Found ${bestMatch.name} in the $pos of the camera view (confidence ${(bestMatch.confidence * 100).round()}%$embedNote).',
+          'Found $displayName in the $pos of the camera view (confidence ${(bestMatch.confidence * 100).round()}%$embedNote).',
     ));
   }
 }

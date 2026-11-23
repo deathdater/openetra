@@ -270,9 +270,15 @@ class OpenetraCoordinator {
     try {
       await resourceBloc.resourceManager.refreshTelemetry();
       final frame = await _captureOrReuseFrame(overrideFrame: overrideFrame);
+      final registeredProfiles = await database.listPersonalObjects();
+      final regKeywords = registeredProfiles
+          .map((p) => p.name.trim())
+          .where((n) => n.isNotEmpty)
+          .toList();
       final obs = await orchestrator.runVisualPerception(
         frame,
         task: ModelTask.scenePerception,
+        keywords: regKeywords.isNotEmpty ? regKeywords : null,
       );
       _lastObservation = obs;
 
@@ -298,8 +304,9 @@ class OpenetraCoordinator {
         database: database,
         frame: frame,
         embeddingProvider: orchestrator.embeddingProvider,
+        profilesOverride: registeredProfiles,
       );
-      for (final match in regMatches.take(2)) {
+      for (final match in regMatches.take(3)) {
         buffer.write(' ');
         buffer.write(
           OpenetraLocalizer.registeredObjectSpotted(
@@ -665,7 +672,7 @@ class OpenetraCoordinator {
     }
   }
 
-  /// Workflow D: Find Personal Belongings
+  /// Workflow D: Find Personal Belongings (specific item name)
   Future<void> runFindObject(
     String itemName, {
     CapturedFrame? overrideFrame,
@@ -680,6 +687,11 @@ class OpenetraCoordinator {
         keywords: [itemName],
       );
       _lastObservation = obs;
+
+      final nextStateFuture = objectMemoryBloc.stream.first.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => objectMemoryBloc.state,
+      );
       objectMemoryBloc.add(
         FindPersonalObject(
           itemName,
@@ -687,9 +699,9 @@ class OpenetraCoordinator {
           frame: frame,
         ),
       );
-      await Future<void>.delayed(Duration.zero);
+      final updatedState = await nextStateFuture;
 
-      final msg = objectMemoryBloc.state.lastSearchResult ??
+      final msg = updatedState.lastSearchResult ??
           'Searched camera view for $itemName.';
       await _emitSpoken(
         spokenText: msg,
@@ -699,6 +711,93 @@ class OpenetraCoordinator {
     } catch (e) {
       await _emitSpoken(
         spokenText: 'Object search failed: $e',
+        displaySummary: 'Object search error',
+        haptic: HapticPattern.degraded,
+        isDegraded: true,
+      );
+    }
+  }
+
+  /// Scans the camera view for ALL locally registered personal objects (or a
+  /// specific item when [itemName] is provided). Fixes the hardcoded 'wallet'
+  /// fallback when launched from the Assistive Dial or Floating Companion.
+  Future<void> runFindRegisteredObjects({
+    String? itemName,
+    CapturedFrame? overrideFrame,
+  }) async {
+    final trimmed = itemName?.trim() ?? '';
+    if (trimmed.isNotEmpty) {
+      return runFindObject(trimmed, overrideFrame: overrideFrame);
+    }
+
+    try {
+      final profiles = await database.listPersonalObjects();
+      if (profiles.isEmpty) {
+        const msg =
+            'No personal objects are registered yet. Open Manage Personal Objects to save your items first.';
+        await _emitSpoken(
+          spokenText: msg,
+          displaySummary: 'No registered objects yet',
+          haptic: HapticPattern.caution,
+        );
+        return;
+      }
+
+      resourceBloc.add(const ChangeOperatingMode(OperatingMode.objectSearch));
+      final frame = await _captureOrReuseFrame(overrideFrame: overrideFrame);
+      final keywords = profiles
+          .map((p) => p.name.trim())
+          .where((n) => n.isNotEmpty)
+          .toList();
+      final obs = await orchestrator.runVisualPerception(
+        frame,
+        task: ModelTask.scenePerception,
+        overrideProfile: MirageQueryProfile.objectSearch,
+        keywords: keywords,
+      );
+      _lastObservation = obs;
+
+      final matches = await _registeredMatcher.matchInObservation(
+        observation: obs,
+        database: database,
+        frame: frame,
+        embeddingProvider: orchestrator.embeddingProvider,
+        profilesOverride: profiles,
+      );
+      objectMemoryBloc.add(const LoadPersonalObjects());
+
+      if (matches.isNotEmpty) {
+        final spoken = matches
+            .take(3)
+            .map(
+              (m) => OpenetraLocalizer.registeredObjectSpotted(
+                objectName: m.objectName,
+                zone: m.zone,
+                locale: _activeLocale,
+              ),
+            )
+            .join(' ');
+        await _emitSpoken(
+          spokenText: spoken,
+          displaySummary: spoken,
+          haptic: HapticPattern.confirm,
+          sourceObservationId: obs.provenance.observationId,
+        );
+        return;
+      }
+
+      final checkedNames = keywords.take(4).join(', ');
+      final msg =
+          'Could not spot your registered items ($checkedNames) in the current camera view. Try panning slowly.';
+      await _emitSpoken(
+        spokenText: msg,
+        displaySummary: 'Registered items not in view',
+        haptic: HapticPattern.caution,
+        sourceObservationId: obs.provenance.observationId,
+      );
+    } catch (e) {
+      await _emitSpoken(
+        spokenText: 'Registered object search failed: $e',
         displaySummary: 'Object search error',
         haptic: HapticPattern.degraded,
         isDegraded: true,
@@ -821,7 +920,7 @@ class OpenetraCoordinator {
         await runIdentifyCurrency();
         return;
       case VoiceIntentType.findObject:
-        await runFindObject(intent.targetArgument ?? 'wallet');
+        await runFindRegisteredObjects(itemName: intent.targetArgument);
         return;
       case VoiceIntentType.followUpQuery:
         final lowerQ = intent.rawTranscript.toLowerCase();

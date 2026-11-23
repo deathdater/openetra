@@ -32,6 +32,7 @@ class _StubEmbeddingProvider implements EmbeddingProvider {
 class _StubVisionProvider implements VisionInferenceProvider {
   _StubVisionProvider(this._observations);
   final List<VisionObservation> _observations;
+  final List<List<String>?> capturedKeywords = [];
   int _idx = 0;
 
   @override
@@ -60,6 +61,7 @@ class _StubVisionProvider implements VisionInferenceProvider {
     required MirageQueryProfile profile,
     List<String>? keywords,
   }) async {
+    capturedKeywords.add(keywords);
     final obs = _observations[_idx % _observations.length];
     _idx++;
     return obs;
@@ -490,5 +492,90 @@ void main() {
     expect(find.text('Note: Keys near window'), findsOneWidget);
 
     await tester.runAsync(() => db.close());
+  });
+
+  test('runFindRegisteredObjects scans all actual registered items (never hardcoded wallet) and matches multi-word/synonym/moderate-embedding items in live & continuous scenes', () async {
+    final db = await OpenetraDatabase.open(
+      factory: databaseFactoryFfi,
+      dbPath: inMemoryDatabasePath,
+    );
+    final stubVision = _StubVisionProvider([
+      _sampleObservation(
+        id: 'v-flask',
+        setting: 'living room',
+        objects: const [
+          ObjectDetection(
+            entityId: 1,
+            name: 'bottle',
+            confidence: 0.68,
+            boundingBox: BoundingBox(x1: 360, y1: 420, x2: 620, y2: 740),
+          ),
+          ObjectDetection(
+            entityId: 2,
+            name: 'glasses',
+            confidence: 0.65,
+            boundingBox: BoundingBox(x1: 720, y1: 450, x2: 920, y2: 650),
+          ),
+        ],
+      ),
+    ]);
+
+    final deps = await OpenetraDependencies.bootstrap(
+      database: db,
+      visionProvider: stubVision,
+      enablePlatformTts: false,
+    );
+
+    // 1. With zero registered objects, reports honestly without searching for 'wallet'
+    await deps.coordinator.runFindRegisteredObjects(
+      overrideFrame: _sampleFrame('empty-1'),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    final emptyMsg = deps.voiceAssistantBloc.state.lastResponse?.spokenText ?? '';
+    expect(emptyMsg, contains('No personal objects are registered yet'));
+    expect(emptyMsg.toLowerCase(), isNot(contains('wallet')));
+
+    // 2. Register 'my water flask' and 'reading specs' (NOT wallet!)
+    final now = DateTime(2026, 11, 23, 22, 30, 0);
+    await db.upsertPersonalObject(
+      PersonalObjectProfile(
+        id: 'reg-flask',
+        name: 'my water flask',
+        category: 'personal',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    await db.upsertPersonalObject(
+      PersonalObjectProfile(
+        id: 'reg-specs',
+        name: 'reading specs',
+        category: 'personal',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    // 3. Find Registered Object (no argument) scans all registered items via synonyms
+    await deps.coordinator.runFindRegisteredObjects(
+      overrideFrame: _sampleFrame('find-all-1'),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(stubVision.capturedKeywords.last, containsAll(['my water flask', 'reading specs']));
+    final foundMsg = deps.voiceAssistantBloc.state.lastResponse?.spokenText ?? '';
+    expect(foundMsg, contains('my water flask'));
+    expect(foundMsg, contains('reading specs'));
+
+    // 4. Continuous / live scene understanding also passes registered keywords and calls them out
+    await deps.coordinator.runDescribeSurroundings(
+      overrideFrame: _sampleFrame('cont-1'),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(stubVision.capturedKeywords.last, containsAll(['my water flask', 'reading specs']));
+    final liveMsg = deps.voiceAssistantBloc.state.lastResponse?.spokenText ?? '';
+    expect(liveMsg, contains('Your registered my water flask'));
+    expect(liveMsg, contains('Your registered reading specs'));
+
+    await db.close();
   });
 }
