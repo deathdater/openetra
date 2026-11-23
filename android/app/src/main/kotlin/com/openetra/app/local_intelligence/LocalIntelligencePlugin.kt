@@ -1,13 +1,18 @@
 package com.openetra.app.local_intelligence
 
+import android.Manifest
 import android.app.ActivityManager
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.StatFs
+import android.provider.Settings
+import androidx.core.content.ContextCompat
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.ConversationConfig
@@ -153,7 +158,56 @@ class LocalIntelligencePlugin(
         )
     }
 
+    private fun inspectInternetState(): Map<String, Any> {
+        val hasManifestPerm = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.INTERNET
+        ) == PackageManager.PERMISSION_GRANTED
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        val network = cm?.activeNetwork
+        val caps = if (network != null) cm.getNetworkCapabilities(network) else null
+        val isConnected = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        val isWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        return mapOf(
+            "hasPermission" to hasManifestPerm,
+            "isConnected" to isConnected,
+            "isWifi" to isWifi
+        )
+    }
+
+    private fun openInternetSettingsPanel(): Boolean {
+        return try {
+            val action = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                Settings.Panel.ACTION_INTERNET_CONNECTIVITY
+            } else {
+                Settings.ACTION_WIFI_SETTINGS
+            }
+            val intent = Intent(action).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: Throwable) {
+            try {
+                val fallback = Intent(Settings.ACTION_WIRELESS_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(fallback)
+                true
+            } catch (_: Throwable) {
+                false
+            }
+        }
+    }
+
     private fun checkNetwork(wifiOnly: Boolean): String? {
+        val hasManifestPerm = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.INTERNET
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!hasManifestPerm) {
+            return "Internet permission is disabled for Openetra. Enable network access in Android Settings to download models."
+        }
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return "Unable to inspect network state."
         val network = cm.activeNetwork
@@ -250,6 +304,14 @@ class LocalIntelligencePlugin(
         when (call.method) {
             "probeDevice" -> {
                 result.success(probeDevice())
+            }
+
+            "checkInternetAccess" -> {
+                result.success(inspectInternetState())
+            }
+
+            "openInternetSettings" -> {
+                result.success(mapOf("opened" to openInternetSettingsPanel()))
             }
 
             "downloadModel" -> {

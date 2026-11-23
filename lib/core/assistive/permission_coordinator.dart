@@ -8,6 +8,7 @@ enum OpenetraPermission {
   microphone,
   notifications,
   overlay,
+  internet,
 }
 
 enum PermissionGrantState {
@@ -46,12 +47,17 @@ abstract class PermissionGateway {
   Future<PermissionGrantState> check(OpenetraPermission permission);
   Future<PermissionGrantState> request(OpenetraPermission permission);
   Future<bool> openSystemSettings();
+  Future<bool> openInternetSettings() async => openSystemSettings();
 }
 
-/// Live Android/iOS permission gateway backed by `permission_handler`.
+/// Live Android/iOS permission gateway backed by `permission_handler` and
+/// Openetra's native Android connectivity/permission probe for optional internet.
 /// Fails safely to `PermissionGrantState.unknown` on unsupported hosts (e.g. VM tests).
 class PlatformPermissionGateway implements PermissionGateway {
   const PlatformPermissionGateway();
+
+  static const MethodChannel _networkChannel =
+      MethodChannel('com.openetra.app/local_intelligence');
 
   ph.Permission _toPlatform(OpenetraPermission p) {
     return switch (p) {
@@ -59,6 +65,7 @@ class PlatformPermissionGateway implements PermissionGateway {
       OpenetraPermission.microphone => ph.Permission.microphone,
       OpenetraPermission.notifications => ph.Permission.notification,
       OpenetraPermission.overlay => ph.Permission.systemAlertWindow,
+      OpenetraPermission.internet => ph.Permission.notification, // handled natively
     };
   }
 
@@ -74,6 +81,23 @@ class PlatformPermissionGateway implements PermissionGateway {
 
   @override
   Future<PermissionGrantState> check(OpenetraPermission permission) async {
+    if (permission == OpenetraPermission.internet) {
+      try {
+        final res = await _networkChannel
+            .invokeMapMethod<String, dynamic>('checkInternetAccess');
+        if (res == null) return PermissionGrantState.unknown;
+        if (res['hasPermission'] == false) {
+          return PermissionGrantState.permanentlyDenied;
+        }
+        return res['isConnected'] == true
+            ? PermissionGrantState.granted
+            : PermissionGrantState.denied;
+      } on MissingPluginException {
+        return PermissionGrantState.unknown;
+      } catch (_) {
+        return PermissionGrantState.unknown;
+      }
+    }
     try {
       final status = await _toPlatform(permission).status;
       return _mapStatus(status);
@@ -86,6 +110,10 @@ class PlatformPermissionGateway implements PermissionGateway {
 
   @override
   Future<PermissionGrantState> request(OpenetraPermission permission) async {
+    if (permission == OpenetraPermission.internet) {
+      await openInternetSettings();
+      return check(OpenetraPermission.internet);
+    }
     try {
       final status = await _toPlatform(permission).request();
       return _mapStatus(status);
@@ -106,6 +134,20 @@ class PlatformPermissionGateway implements PermissionGateway {
       return false;
     }
   }
+
+  @override
+  Future<bool> openInternetSettings() async {
+    try {
+      final res = await _networkChannel
+          .invokeMapMethod<String, dynamic>('openInternetSettings');
+      if (res?['opened'] == true) return true;
+      return openSystemSettings();
+    } on MissingPluginException {
+      return false;
+    } catch (_) {
+      return openSystemSettings();
+    }
+  }
 }
 
 class DefaultInMemoryPermissionGateway implements PermissionGateway {
@@ -122,6 +164,7 @@ class DefaultInMemoryPermissionGateway implements PermissionGateway {
     OpenetraPermission.microphone: PermissionGrantState.unknown,
     OpenetraPermission.notifications: PermissionGrantState.unknown,
     OpenetraPermission.overlay: PermissionGrantState.denied,
+    OpenetraPermission.internet: PermissionGrantState.unknown,
   };
 
   void setStateForTest(OpenetraPermission p, PermissionGrantState state) {
@@ -138,10 +181,14 @@ class DefaultInMemoryPermissionGateway implements PermissionGateway {
 
   @override
   Future<bool> openSystemSettings() async => true;
+
+  @override
+  Future<bool> openInternetSettings() async => true;
 }
 
 /// Contextual permission tracking, user-friendly accessible explanations, and
-/// revocation notifications across Camera, Microphone, Notifications, and Overlay.
+/// revocation notifications across Camera, Microphone, Notifications, Overlay,
+/// and optional Internet Access.
 class PermissionCoordinator {
   PermissionCoordinator({PermissionGateway? gateway})
       : _gateway = gateway ?? DefaultInMemoryPermissionGateway();
@@ -152,6 +199,7 @@ class PermissionCoordinator {
     OpenetraPermission.microphone: PermissionGrantState.unknown,
     OpenetraPermission.notifications: PermissionGrantState.unknown,
     OpenetraPermission.overlay: PermissionGrantState.unknown,
+    OpenetraPermission.internet: PermissionGrantState.unknown,
   };
 
   final StreamController<PermissionStatusRecord> _revocationController =
@@ -167,12 +215,19 @@ class PermissionCoordinator {
     OpenetraPermission.notifications,
   ];
 
+  /// Optional permissions surfaced informatively in permission checks without
+  /// blocking offline core features, and enforced only when needed (e.g. model downloads).
+  static const List<OpenetraPermission> optionalStartupPermissions = [
+    OpenetraPermission.internet,
+  ];
+
   static String displayNameFor(OpenetraPermission p) {
     return switch (p) {
       OpenetraPermission.camera => 'Camera',
       OpenetraPermission.microphone => 'Microphone',
       OpenetraPermission.notifications => 'Notifications',
       OpenetraPermission.overlay => 'Display Over Other Apps',
+      OpenetraPermission.internet => 'Internet Access (Optional)',
     };
   }
 
@@ -186,6 +241,8 @@ class PermissionCoordinator {
         'Notification permission displays an honest active status bar item when the optional floating companion service is enabled.',
       OpenetraPermission.overlay =>
         'Display over other apps allows the optional Floating Assistive Widget to remain reachable outside Openetra. Camera and mic never start covertly from the background.',
+      OpenetraPermission.internet =>
+        'Internet access is optional for core offline features, but mandatory when you choose to download optional on-device AI models.',
     };
   }
 
@@ -253,6 +310,8 @@ class PermissionCoordinator {
   }
 
   Future<bool> openSystemSettings() => _gateway.openSystemSettings();
+
+  Future<bool> openInternetSettings() => _gateway.openInternetSettings();
 
   Future<void> markRevoked(OpenetraPermission p) async {
     _cached[p] = PermissionGrantState.revoked;

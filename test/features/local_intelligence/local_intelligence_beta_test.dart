@@ -28,12 +28,14 @@ class _FakeLocalLlmEngine implements LocalLlmEngine {
   bool shouldPassVerification = true;
   bool shouldPassSmokeTest = true;
   bool shouldPassDownload = true;
+  InternetAccessStatus fakeInternet = InternetAccessStatus.availableWifi;
   String? fakeSummaryResponse =
       'Earlier today you completed 2 recorded activities: 1 scene description and 1 text reading.';
   String? _loaded;
   int generateCallCount = 0;
   int unloadCallCount = 0;
   int downloadCallCount = 0;
+  int openInternetSettingsCount = 0;
   bool lastWifiOnlyArg = true;
   final List<String> deletedModels = [];
   final StreamController<ModelDownloadProgress> _progressController =
@@ -48,6 +50,15 @@ class _FakeLocalLlmEngine implements LocalLlmEngine {
 
   @override
   Future<DeviceHardwareProfile> probeDevice() async => device;
+
+  @override
+  Future<InternetAccessStatus> checkInternetAccess() async => fakeInternet;
+
+  @override
+  Future<bool> openInternetSettings() async {
+    openInternetSettingsCount++;
+    return true;
+  }
 
   @override
   Future<ModelDownloadResult> downloadModel({
@@ -428,11 +439,26 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 60));
     expect(bloc.state.config.wifiOnlyDownload, isFalse);
 
+    // Offline -> mandatory internet gate blocks download & flags internetActionRequired
+    fakeLlm.fakeInternet = const InternetAccessStatus(
+      hasPermission: true,
+      isConnected: false,
+      isWifi: false,
+    );
+    bloc.add(const DownloadAndInstallModel(modelId: 'qwen3-0.6b-q4'));
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(fakeLlm.downloadCallCount, 0);
+    expect(bloc.state.internetActionRequired, isTrue);
+    expect(bloc.state.statusMessage, contains('Internet access is required'));
+
+    // Reconnect -> download succeeds
+    fakeLlm.fakeInternet = InternetAccessStatus.availableWifi;
     bloc.add(const DownloadAndInstallModel(modelId: 'qwen3-0.6b-q4'));
     await Future<void>.delayed(const Duration(milliseconds: 120));
 
     expect(fakeLlm.downloadCallCount, 1);
     expect(fakeLlm.lastWifiOnlyArg, isFalse);
+    expect(bloc.state.internetActionRequired, isFalse);
     expect(bloc.state.installedModelIds, contains('qwen3-0.6b-q4'));
     expect(bloc.state.config.activeModelId, 'qwen3-0.6b-q4');
     expect(bloc.state.downloadingModelId, isNull);

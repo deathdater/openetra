@@ -47,9 +47,32 @@ class ModelDownloadProgress {
   final String status;
 }
 
+class InternetAccessStatus {
+  const InternetAccessStatus({
+    required this.hasPermission,
+    required this.isConnected,
+    required this.isWifi,
+  });
+
+  final bool hasPermission;
+  final bool isConnected;
+  final bool isWifi;
+
+  static const InternetAccessStatus availableWifi = InternetAccessStatus(
+    hasPermission: true,
+    isConnected: true,
+    isWifi: true,
+  );
+}
+
 /// Replaceable on-device LLM inference and model-file bridge contract.
 abstract class LocalLlmEngine {
   Future<DeviceHardwareProfile> probeDevice();
+
+  Future<InternetAccessStatus> checkInternetAccess() async =>
+      InternetAccessStatus.availableWifi;
+
+  Future<bool> openInternetSettings() async => false;
 
   Stream<ModelDownloadProgress> get downloadProgressStream;
 
@@ -149,6 +172,35 @@ class NativeLocalLlmEngine implements LocalLlmEngine {
       return DeviceHardwareProfile.unknown;
     } catch (_) {
       return DeviceHardwareProfile.unknown;
+    }
+  }
+
+  @override
+  Future<InternetAccessStatus> checkInternetAccess() async {
+    try {
+      final res =
+          await _channel.invokeMapMethod<String, dynamic>('checkInternetAccess');
+      if (res == null) return InternetAccessStatus.availableWifi;
+      return InternetAccessStatus(
+        hasPermission: res['hasPermission'] != false,
+        isConnected: res['isConnected'] == true,
+        isWifi: res['isWifi'] == true,
+      );
+    } on MissingPluginException {
+      return InternetAccessStatus.availableWifi;
+    } catch (_) {
+      return InternetAccessStatus.availableWifi;
+    }
+  }
+
+  @override
+  Future<bool> openInternetSettings() async {
+    try {
+      final res = await _channel
+          .invokeMapMethod<String, dynamic>('openInternetSettings');
+      return res?['opened'] == true;
+    } catch (_) {
+      return false;
     }
   }
 

@@ -96,7 +96,15 @@ class LocalIntelligenceSettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Local Intelligence (Beta)')),
-      body: BlocBuilder<LocalIntelligenceBloc, LocalIntelligenceState>(
+      body: BlocConsumer<LocalIntelligenceBloc, LocalIntelligenceState>(
+        listenWhen: (prev, curr) =>
+            curr.internetActionRequired && !prev.internetActionRequired,
+        listener: (context, state) {
+          final msg = state.statusMessage;
+          if (msg != null && msg.isNotEmpty) {
+            onSpeakText?.call(msg);
+          }
+        },
         builder: (context, state) {
           final cfg = state.config;
           final dev = state.deviceProfile;
@@ -109,9 +117,51 @@ class LocalIntelligenceSettingsScreen extends StatelessWidget {
                     (cfg.enabled
                         ? 'Local Intelligence Beta is enabled. All processing remains strictly on-device.'
                         : 'Local Intelligence Beta is disabled. Core Openetra features operate independently.'),
-                isDegraded: false,
+                isDegraded: state.internetActionRequired,
                 isBusy: state.isBusy,
               ),
+              if (state.internetActionRequired) ...[
+                const SizedBox(height: OpenetraSpacing.md),
+                OpenetraCard(
+                  borderColor: palette.warning,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Internet Access Required for Download',
+                        style: textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: OpenetraSpacing.xs),
+                      Text(
+                        'Internet access is optional for offline Openetra features, but mandatory when downloading an on-device AI model package.',
+                        style: textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: OpenetraSpacing.sm),
+                      Wrap(
+                        spacing: OpenetraSpacing.sm,
+                        runSpacing: OpenetraSpacing.sm,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: () => context
+                                .read<LocalIntelligenceBloc>()
+                                .add(const OpenInternetSettingsRequested()),
+                            icon: const Icon(Icons.wifi_find_outlined),
+                            label: const Text('Open Internet Settings'),
+                          ),
+                          if (cfg.wifiOnlyDownload)
+                            OutlinedButton.icon(
+                              onPressed: () => context
+                                  .read<LocalIntelligenceBloc>()
+                                  .add(const SetWifiOnlyDownload(false)),
+                              icon: const Icon(Icons.signal_cellular_alt),
+                              label: const Text('Allow Mobile Data'),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: OpenetraSpacing.lg),
               const OpenetraSectionHeader(
                 title: 'Feature Controls',

@@ -577,6 +577,7 @@ class _OpenetraAppState extends State<OpenetraApp> with WidgetsBindingObserver {
       OpenetraPermission.microphone => Icons.mic_outlined,
       OpenetraPermission.notifications => Icons.notifications_outlined,
       OpenetraPermission.overlay => Icons.layers_outlined,
+      OpenetraPermission.internet => Icons.wifi_outlined,
     };
   }
 
@@ -594,6 +595,14 @@ class _OpenetraAppState extends State<OpenetraApp> with WidgetsBindingObserver {
       final missing = await widget.deps.permissionCoordinator
           .checkMissingPermissions(permissions: relevant);
       if (missing.isEmpty || !mounted) return;
+
+      // Internet is strictly optional during general permission checks; surface it
+      // informatively when other required permissions are being explained.
+      final optionalMissing = await widget.deps.permissionCoordinator
+          .checkMissingPermissions(
+            permissions: PermissionCoordinator.optionalStartupPermissions,
+          );
+      if (!mounted) return;
 
       final navContext = _navigatorKey.currentContext;
       if (navContext == null || !navContext.mounted) return;
@@ -674,6 +683,42 @@ class _OpenetraAppState extends State<OpenetraApp> with WidgetsBindingObserver {
                       ],
                     ),
                     const SizedBox(height: OpenetraSpacing.md),
+                  ],
+                  if (optionalMissing.isNotEmpty) ...[
+                    const Divider(),
+                    const SizedBox(height: OpenetraSpacing.xs),
+                    for (final opt in optionalMissing) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            _iconForPermission(opt.permission),
+                            color: palette.secondary,
+                            size: 20,
+                          ),
+                          const SizedBox(width: OpenetraSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  PermissionCoordinator.displayNameFor(
+                                    opt.permission,
+                                  ),
+                                  style: textTheme.titleSmall,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  opt.explanation,
+                                  style: textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: OpenetraSpacing.sm),
+                    ],
                   ],
                 ],
               ),

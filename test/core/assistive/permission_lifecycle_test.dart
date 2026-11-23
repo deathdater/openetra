@@ -28,6 +28,12 @@ class _TrackingPermissionGateway implements PermissionGateway {
     openSettingsCount++;
     return true;
   }
+
+  @override
+  Future<bool> openInternetSettings() async {
+    openSettingsCount++;
+    return true;
+  }
 }
 
 void main() {
@@ -120,6 +126,8 @@ void main() {
         OpenetraPermission.camera: PermissionGrantState.granted,
         OpenetraPermission.microphone: PermissionGrantState.granted,
         OpenetraPermission.notifications: PermissionGrantState.granted,
+        // Internet is optional for core offline features -> must NOT trigger blocking dialog
+        OpenetraPermission.internet: PermissionGrantState.denied,
       });
 
       await tester.runAsync(() async {

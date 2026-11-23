@@ -115,6 +115,10 @@ class CancelModelDownload extends LocalIntelligenceEvent {
   const CancelModelDownload();
 }
 
+class OpenInternetSettingsRequested extends LocalIntelligenceEvent {
+  const OpenInternetSettingsRequested();
+}
+
 class ActivateInstalledModel extends LocalIntelligenceEvent {
   const ActivateInstalledModel(this.modelId);
   final String modelId;
@@ -184,6 +188,7 @@ class LocalIntelligenceState extends Equatable {
     this.searchQuery = '',
     this.latestSummary,
     this.isBusy = false,
+    this.internetActionRequired = false,
     this.statusMessage,
   });
 
@@ -201,6 +206,7 @@ class LocalIntelligenceState extends Equatable {
   final String searchQuery;
   final ActivitySummaryResult? latestSummary;
   final bool isBusy;
+  final bool internetActionRequired;
   final String? statusMessage;
 
   LocalIntelligenceState copyWith({
@@ -222,6 +228,7 @@ class LocalIntelligenceState extends Equatable {
     ActivitySummaryResult? latestSummary,
     bool clearSummary = false,
     bool? isBusy,
+    bool? internetActionRequired,
     String? statusMessage,
     bool clearStatus = false,
   }) {
@@ -252,6 +259,8 @@ class LocalIntelligenceState extends Equatable {
       latestSummary:
           clearSummary ? null : (latestSummary ?? this.latestSummary),
       isBusy: isBusy ?? this.isBusy,
+      internetActionRequired:
+          internetActionRequired ?? this.internetActionRequired,
       statusMessage:
           clearStatus ? null : (statusMessage ?? this.statusMessage),
     );
@@ -273,6 +282,7 @@ class LocalIntelligenceState extends Equatable {
         searchQuery,
         latestSummary,
         isBusy,
+        internetActionRequired,
         statusMessage,
       ];
 }
@@ -295,6 +305,7 @@ class LocalIntelligenceBloc
     on<AskHistoricalQuestion>(_onAskQuestion);
     on<DownloadAndInstallModel>(_onDownloadAndInstallModel);
     on<CancelModelDownload>(_onCancelModelDownload);
+    on<OpenInternetSettingsRequested>(_onOpenInternetSettings);
     on<ActivateInstalledModel>(_onActivateInstalledModel);
     on<_ModelDownloadProgressUpdated>(_onDownloadProgressUpdated);
     on<VerifyAndActivateModel>(_onVerifyAndActivateModel);
@@ -514,14 +525,43 @@ class LocalIntelligenceBloc
     final compat = spec.evaluateDevice(state.deviceProfile);
     if (!compat.isCompatible) {
       emit(state.copyWith(
+        internetActionRequired: false,
         statusMessage:
             '${spec.displayName} is not compatible with this device: ${compat.reasons.join(' ')}',
       ));
       return;
     }
 
+    // Mandatory Internet Access gate before downloading any model package.
+    final internet = await llmEngine.checkInternetAccess();
+    if (!internet.hasPermission) {
+      emit(state.copyWith(
+        internetActionRequired: true,
+        statusMessage:
+            'Internet permission is required to download ${spec.displayName}. Please allow network access for Openetra in Android Settings.',
+      ));
+      return;
+    }
+    if (!internet.isConnected) {
+      emit(state.copyWith(
+        internetActionRequired: true,
+        statusMessage:
+            'Internet access is required to download ${spec.displayName} (~${spec.packageSizeMb} MB). Connect to Wi-Fi or mobile data and try again.',
+      ));
+      return;
+    }
+    if (state.config.wifiOnlyDownload && !internet.isWifi) {
+      emit(state.copyWith(
+        internetActionRequired: true,
+        statusMessage:
+            'Wi-Fi connection is required to download ${spec.displayName} while Wi-Fi-only download is enabled. Connect to Wi-Fi or allow mobile data.',
+      ));
+      return;
+    }
+
     emit(state.copyWith(
       isBusy: true,
+      internetActionRequired: false,
       downloadingModelId: spec.modelId,
       downloadProgress: 0.0,
       downloadedBytes: 0,
@@ -639,6 +679,14 @@ class LocalIntelligenceBloc
       clearDownloadingModel: true,
       statusMessage: 'Model download cancelled.',
     ));
+  }
+
+  Future<void> _onOpenInternetSettings(
+    OpenInternetSettingsRequested event,
+    Emitter<LocalIntelligenceState> emit,
+  ) async {
+    await llmEngine.openInternetSettings();
+    emit(state.copyWith(internetActionRequired: false));
   }
 
   Future<void> _onActivateInstalledModel(
