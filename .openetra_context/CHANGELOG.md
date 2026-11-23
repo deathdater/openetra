@@ -1,5 +1,11 @@
 # Openetra Context Changelog
 
+## [0.7.0-phase5-indic-intelligence] - 2026-11-23
+### Added
+- Vendored verified `sherpa-onnx 2.0.3` static-OR AAR, `silero_vad.int8.onnx`, `hin.traineddata`, and `kan.traineddata`; added ML Kit Devanagari, Tesseract4Android, ML Kit Barcode, and LiteRT Gradle dependencies.
+- Implemented `IndicOcrPlugin` (`com.openetra.app/indic_ocr`) and `OfflineSpeechPlugin` (`com.openetra.app/speech`) plus Dart `NativeIndicOcrProvider` and `NativeOfflineAsrProvider`.
+- Implemented `OpenetraLocalizer` authoring native EN/HI/KN safety, scene, hazard, and currency output without machine translation.
+
 ## [0.6.0-mvp-vertical-slice] - 2026-11-23
 ### Added & Verified
 - Authored 24 passing host unit, BLoC, SQLite, safety, OCR, currency/object-memory, and accessibility widget tests plus `MirageNativeInstrumentedTest.kt`.

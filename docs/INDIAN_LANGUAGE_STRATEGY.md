@@ -23,5 +23,6 @@
 
 ### 2.3 Offline Indian TTS & Translation Policy
 - **Android System Offline TTS Check:** Never assume system TTS works offline. Openetra queries `TextToSpeech.getVoices()` on Android and checks `!voice.isNetworkConnectionRequired && !voice.features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)` per locale.
-- **Meta MMS VITS (`vits-mms-*`):** Licensed `CC-BY-NC 4.0` (non-commercial) — **explicitly excluded** from production shipping packages. Permissive MIT/Apache-2.0 Piper or AI4Bharat ONNX packs serve as downloadable alternatives.
+- **Meta MMS VITS (`vits-mms-*`):** Licensed `CC-BY-NC 4.0` (non-commercial) — **explicitly excluded** from production shipping packages.
+- **Piper TTS Voices (`piper-voices`):** Although the `piper-voices` repository carries an MIT marker for tooling/metadata, individual voice `.onnx` checkpoints (such as `hi_IN-rohan` or `hi_IN-pratham`) inherit upstream dataset licences (e.g., IIT Madras IndicTTS). Each candidate voice's per-folder `MODEL_CARD` must be audited before bundling.
 - **Translation Policy:** Never force multi-stage translation for hazard warnings or basic descriptions. Safety alerts and core UI confirmations are authored natively in English, Hindi, and Kannada and spoken directly in the selected offline language.

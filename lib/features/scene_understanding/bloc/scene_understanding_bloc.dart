@@ -10,11 +10,12 @@ abstract class SceneUnderstandingEvent extends Equatable {
 }
 
 class ProcessSceneObservation extends SceneUnderstandingEvent {
-  const ProcessSceneObservation(this.observation);
+  const ProcessSceneObservation(this.observation, {this.locale = 'en-IN'});
   final VisionObservation observation;
+  final String locale;
 
   @override
-  List<Object?> get props => [observation];
+  List<Object?> get props => [observation, locale];
 }
 
 class AnswerSceneFollowUp extends SceneUnderstandingEvent {
@@ -45,7 +46,7 @@ class SceneUnderstandingState extends Equatable {
 class SceneUnderstandingBloc
     extends Bloc<SceneUnderstandingEvent, SceneUnderstandingState> {
   SceneUnderstandingBloc({
-    SceneDescription Function(VisionObservation, SceneGraph?)? builder,
+    SceneDescription Function(VisionObservation, SceneGraph?, String)? builder,
     String Function(String, SceneGraph?)? followUpResolver,
   })  : _builder = builder,
         _followUpResolver = followUpResolver,
@@ -54,11 +55,12 @@ class SceneUnderstandingBloc
     on<AnswerSceneFollowUp>(_onFollowUp);
   }
 
-  SceneDescription Function(VisionObservation, SceneGraph?)? _builder;
+  SceneDescription Function(VisionObservation, SceneGraph?, String)? _builder;
   String Function(String, SceneGraph?)? _followUpResolver;
 
   void attachEngine({
-    required SceneDescription Function(VisionObservation, SceneGraph?) builder,
+    required SceneDescription Function(VisionObservation, SceneGraph?, String)
+        builder,
     required String Function(String, SceneGraph?) followUpResolver,
   }) {
     _builder = builder;
@@ -71,7 +73,7 @@ class SceneUnderstandingBloc
   ) {
     final prevGraph = state.latestDescription?.sceneGraph;
     final built = _builder != null
-        ? _builder!(event.observation, prevGraph)
+        ? _builder!(event.observation, prevGraph, event.locale)
         : _fallbackBuild(event.observation);
     emit(SceneUnderstandingState(latestDescription: built));
   }

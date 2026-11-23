@@ -1,19 +1,18 @@
 # Openetra Local Engineering Context
 
-**Current Version:** `0.6.0-mvp-vertical-slice`  
-**Phase:** Verified Vertical Slice (Phases 0–4 Live on Android ARM64 + Phase 5–6 Extensible Interfaces)  
+**Current Version:** `0.7.0-phase5-indic-intelligence`  
+**Phase:** Phase 5 — Offline Indic OCR, Silero VAD / sherpa-onnx ASR & Direct EN/HI/KN Localisation  
 **Last Updated:** 2026-11-23  
 **Git Branch:** `main`  
 
-## Verified Build & Test Baseline
-- **`flutter analyze`:** `No issues found!`
-- **Host Test Suite (`flutter test`):** `24/24` passing (Mirage response parser on real COCO fixtures, Scene Understanding deduplication & offline QA, Hazard 5-category & IoUTracker, `SafetySpeechGuard` sanitization, Indic script detection & reading order, `AIModelOrchestrator` & thermal throttling, 10-table SQLite via `sqflite_common_ffi` & SHA-256 verification, Currency & Object Memory workflows, TalkBack semantics & `>=64dp` tap targets, EN/HI/KN `VoiceIntentRouter`).
-- **Android ARM64 APK Build:** `build/app/outputs/flutter-apk/app-debug.apk` (Gradle `8.7`, AGP `8.5.2`, Kotlin `2.2.20`, `compileSdk 36`, `minSdk 26`, NDK `27.0.12077973`, CMake `3.22.1`, contains `libopenetra_mirage.so` + `libc++_shared.so` + `mirage.cact`; production `AndroidManifest.xml` omits `INTERNET`).
-- **Android ARM64 Emulator JNI Verification (`Medium_Phone_API_35`, Android 15 `arm64-v8a`):**
-  - `MirageNativeInstrumentedTest`: Passed (`1/1`, `4.11 s`), verified SHA-256 (`4249a0f7...`), `cactus_load` `57.09 ms`, `stop_sign_231049.jpg` `961.40 ms` / `1431.23 ms` (`stop sign`, `ARRET`), `living_room_139.jpg` `1429.90 ms` (`living room`, `chair`).
-  - `MainActivity` cold launch: `Status: ok`, `TotalTime: 5425 ms`, Dart VM initialized cleanly with zero uncaught errors.
+## Verified Phase 5 Assets & Plugins
+- `android/app/libs/sherpa-onnx-static-link-onnxruntime-2.0.3.aar` (`38 MB`, Apache-2.0, SHA-256 `7744a3a8...`)
+- `assets/models/vad/silero_vad.int8.onnx` (`208 KB`, MIT, SHA-256 `c36d490a...`)
+- `assets/models/tessdata/hin.traineddata` (`1.07 MB`, Apache-2.0, SHA-256 `4c73ffc5...`)
+- `assets/models/tessdata/kan.traineddata` (`3.44 MB`, Apache-2.0, SHA-256 `bd31e6b6...`)
+- Google ML Kit Devanagari OCR (`16.0.1`), Tesseract4Android (`4.9.0`), Google ML Kit Barcode (`17.3.0`), Google AI Edge LiteRT (`2.4.0`).
+- **Native Plugins:** `IndicOcrPlugin` (`com.openetra.app/indic_ocr`) and `OfflineSpeechPlugin` (`com.openetra.app/speech`) registered in `MainActivity.kt`.
+- **Dart Layer:** `OpenetraLocalizer` (authoring native EN/HI/KN strings across Scene, Hazard, SafetySpeechGuard, Currency), `NativeIndicOcrProvider`, `NativeOfflineAsrProvider`, and gated offline microphone trigger on `HomeScreen`.
 
-## Active Next Work (Phase 5+)
-1. Package & benchmark offline Indic OCR packs (`ppocrv5-devanagari/ta/te` + `tesseract-fast-kan/ben/mal`) and `sherpa-onnx` IndicConformer + Silero VAD packs.
-2. Train & quantise Indian currency MobileNetV3 INT8 TFLite model (`₹10..₹500`) and evaluate Depth Anything V2 Small INT8.
-3. Execute battery/thermal profiling and blind-user usability trials on physical Android devices (Phase 7–8).
+## Next Milestone (`v0.8.0-phase6-specialist-and-shopping`)
+Implement SQLite schema v2 (`local_products` + seeded Indian EAN-890 catalog), `SpecialistVisionPlugin` (ML Kit Barcode, 96-dim visual crop descriptor, LiteRT `2.4.0` currency slot), cosine-similarity matching in `ObjectMemoryBloc`, Mirage `form` + OCR + LiteRT fusion in `CurrencyRecognitionService`, and `ShoppingScreen`.

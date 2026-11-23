@@ -68,6 +68,12 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            pickFirsts += ["**/libc++_shared.so"]
+        }
+    }
+
     buildTypes {
         release {
             // Signing with the debug keys for local testing builds; replace for store release.
@@ -84,9 +90,19 @@ dependencies {
     implementation "androidx.exifinterface:exifinterface:1.3.7"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"
 
+    // Phase 5: Offline Indic OCR & sherpa-onnx VAD/ASR
+    implementation files("libs/sherpa-onnx-static-link-onnxruntime-2.0.3.aar")
+    implementation "cz.adaptech.tesseract4android:tesseract4android:4.9.0"
+    implementation "com.google.mlkit:text-recognition-devanagari:16.0.1"
+
+    // Phase 6: Offline Barcode & LiteRT
+    implementation "com.google.mlkit:barcode-scanning:17.3.0"
+    implementation "com.google.ai.edge.litert:litert:2.4.0"
+
     androidTestImplementation "androidx.test:runner:1.6.1"
     androidTestImplementation "androidx.test:rules:1.6.1"
     androidTestImplementation "androidx.test.ext:junit:1.2.1"
+    androidTestImplementation "com.google.zxing:core:3.5.3"
 }
 
 flutter {

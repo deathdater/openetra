@@ -1,6 +1,7 @@
 import 'package:uuid/uuid.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/inference/model_provider.dart';
+import '../../../core/localization/openetra_localizer.dart';
 
 /// Workflow E: Offline Indian currency recognition combining a compact
 /// classifier interface with Mirage OCR numeral evidence. Never uses color
@@ -19,18 +20,22 @@ class CurrencyRecognitionService {
   Future<CurrencyRecognitionResult> identify({
     required CapturedFrame frame,
     required VisionObservation mirageObservation,
+    String locale = 'en-IN',
   }) async {
+    final disclaimer = OpenetraLocalizer.currencyNonCounterfeitDisclaimer(locale);
     if (frame.qualityMetrics.isDegraded) {
       final reasons = frame.qualityMetrics.degradationReasons.join(' and ');
+      final msg = OpenetraLocalizer.langCode(locale) == 'en'
+          ? 'Image quality is too poor to read the currency note due to $reasons. Please improve lighting and hold steady. $disclaimer'
+          : '${OpenetraLocalizer.degradedNotice(frame.qualityMetrics.degradationReasons, locale)} $disclaimer';
       return CurrencyRecognitionResult(
         provenance: mirageObservation.provenance,
         denomination: InrDenomination.uncertain,
         classifierConfidence: 0.0,
         ocrMatchedValue: null,
         isUncertain: true,
-        spokenAdvisory:
-            'Image quality is too poor to read the currency note due to $reasons. Please improve lighting and hold steady. $nonCounterfeitDisclaimer',
-        nonCounterfeitDisclaimer: nonCounterfeitDisclaimer,
+        spokenAdvisory: msg,
+        nonCounterfeitDisclaimer: disclaimer,
       );
     }
 
@@ -81,17 +86,20 @@ class CurrencyRecognitionService {
         classifierConfidence: ocrConfidence,
         ocrMatchedValue: ocrNumeral,
         isUncertain: true,
-        spokenAdvisory:
-            'Printed numeral ${bestDenom.spokenLabel} detected via text check, '
-            'without dedicated banknote classifier confirmation. Flip or flatten the note to double check. $nonCounterfeitDisclaimer',
-        nonCounterfeitDisclaimer: nonCounterfeitDisclaimer,
+        spokenAdvisory: OpenetraLocalizer.langCode(locale) == 'en'
+            ? 'Printed numeral ${bestDenom.spokenLabel} detected via text check, '
+                'without dedicated banknote classifier confirmation. Flip or flatten the note to double check. $disclaimer'
+            : OpenetraLocalizer.currencyIdentified(
+                bestDenom,
+                (ocrConfidence * 100).round(),
+                ocrNumeral,
+                locale,
+              ),
+        nonCounterfeitDisclaimer: disclaimer,
       );
     }
 
     if (bestDenom == InrDenomination.uncertain || bestScore < 0.65) {
-      final hint = ocrNumeral != null
-          ? ' Text numeral $ocrNumeral was spotted, though confidence is low.'
-          : '';
       return CurrencyRecognitionResult(
         provenance: mirageObservation.provenance,
         denomination: InrDenomination.uncertain,
@@ -99,8 +107,8 @@ class CurrencyRecognitionService {
         ocrMatchedValue: ocrNumeral,
         isUncertain: true,
         spokenAdvisory:
-            'Unable to identify the currency denomination confidently.$hint Hold the note flat in good light and try again. $nonCounterfeitDisclaimer',
-        nonCounterfeitDisclaimer: nonCounterfeitDisclaimer,
+            OpenetraLocalizer.currencyUncertain(locale, ocrValue: ocrNumeral),
+        nonCounterfeitDisclaimer: disclaimer,
       );
     }
 
@@ -109,11 +117,13 @@ class CurrencyRecognitionService {
     final uncertain = disagreesWithOcr || bestScore < 0.80;
     final advisory = disagreesWithOcr
         ? 'Uncertain result: visual classifier suggests ${bestDenom.spokenLabel}, '
-            'but printed number looks like $ocrNumeral. Flip the note and scan again. $nonCounterfeitDisclaimer'
-        : 'This appears to be a ${bestDenom.spokenLabel} note '
-            '(${(bestScore * 100).round()}% confidence'
-            '${ocrNumeral != null ? ', confirmed by printed number $ocrNumeral' : ''}). '
-            '$nonCounterfeitDisclaimer';
+            'but printed number looks like $ocrNumeral. Flip the note and scan again. $disclaimer'
+        : OpenetraLocalizer.currencyIdentified(
+            bestDenom,
+            (bestScore * 100).round(),
+            ocrNumeral,
+            locale,
+          );
 
     return CurrencyRecognitionResult(
       provenance: ObservationProvenance(
@@ -135,7 +145,7 @@ class CurrencyRecognitionService {
       ocrMatchedValue: ocrNumeral,
       isUncertain: uncertain,
       spokenAdvisory: advisory,
-      nonCounterfeitDisclaimer: nonCounterfeitDisclaimer,
+      nonCounterfeitDisclaimer: disclaimer,
     );
   }
 

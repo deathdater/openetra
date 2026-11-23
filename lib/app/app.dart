@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../core/accessibility/accessibility_announcer.dart';
 import '../core/audio/bloc/audio_bloc.dart';
 import '../core/audio/haptic_feedback_service.dart';
+import '../core/audio/native_offline_asr_provider.dart';
 import '../core/audio/speech_controller.dart';
 import '../core/camera/camera_controller_bridge.dart';
 import '../core/inference/ai_model_orchestrator.dart';
@@ -24,6 +25,7 @@ import '../features/scene_understanding/domain/contextual_query_resolver.dart';
 import '../features/scene_understanding/domain/scene_understanding_engine.dart';
 import '../features/settings/bloc/settings_bloc.dart';
 import '../features/smart_reader/bloc/smart_reader_bloc.dart';
+import '../features/smart_reader/data/native_indic_ocr_provider.dart';
 import '../features/smart_reader/domain/ocr_router.dart';
 import '../features/vision_explorer/bloc/vision_bloc.dart';
 import '../features/voice_assistant/bloc/voice_assistant_bloc.dart';
@@ -100,10 +102,13 @@ class OpenetraDependencies {
       speechController: speech,
       hapticService: haptics,
     );
+    final indicOcr = NativeIndicOcrProvider();
+    final offlineAsr = NativeOfflineAsrProvider();
     final orchestrator = AIModelOrchestrator(
       registry: registry,
       resourceManager: resMgr,
       visionProvider: vision,
+      indicOcrProviders: [indicOcr],
     );
 
     final audioBloc = AudioBloc(announcer: announcer, speechController: speech);
@@ -114,8 +119,8 @@ class OpenetraDependencies {
     const sceneEngine = SceneUnderstandingEngine();
     final queryResolver = ContextualQueryResolver();
     final sceneBloc = SceneUnderstandingBloc(
-      builder: (obs, prev) {
-        final desc = sceneEngine.build(obs, previousGraph: prev);
+      builder: (obs, prev, locale) {
+        final desc = sceneEngine.build(obs, previousGraph: prev, locale: locale);
         queryResolver.recordGraph(desc.sceneGraph);
         return desc;
       },
@@ -124,10 +129,11 @@ class OpenetraDependencies {
     );
     final hazardEngine = HazardIntelligenceEngine();
     final hazardBloc = HazardDetectionBloc(
-      evaluator: (obs) => hazardEngine.evaluate(
+      evaluator: (obs, locale) => hazardEngine.evaluate(
         obs,
         deviceResourceDegraded: resMgr.currentState.isDegradedCapability,
         deviceDegradationReason: resMgr.currentState.degradationMessage,
+        locale: locale,
       ),
       onReset: hazardEngine.reset,
     );
@@ -161,6 +167,8 @@ class OpenetraDependencies {
       safetyBloc: safetyBloc,
       resourceBloc: resourceBloc,
       settingsBloc: settingsBloc,
+      speechController: speech,
+      offlineAsrProvider: offlineAsr,
       safetyOutputFilter: (r) => safetyPolicy.enforceResponse(r),
     );
 

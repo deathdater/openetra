@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:uuid/uuid.dart';
 import '../core/audio/bloc/audio_bloc.dart';
+import '../core/audio/native_offline_asr_provider.dart';
+import '../core/audio/speech_controller.dart';
 import '../core/camera/camera_controller_bridge.dart';
 import '../core/domain/entities/entities.dart';
 import '../core/inference/ai_model_orchestrator.dart';
 import '../core/inference/model_provider.dart';
+import '../core/localization/openetra_localizer.dart';
 import '../core/resource_management/bloc/device_resource_bloc.dart';
 import '../core/safety/bloc/safety_bloc.dart';
 import '../core/storage/openetra_database.dart';
@@ -32,6 +35,8 @@ class OpenetraCoordinator {
     required this.safetyBloc,
     required this.resourceBloc,
     required this.settingsBloc,
+    this.speechController,
+    this.offlineAsrProvider,
     CurrencyRecognitionService? currencyService,
     AssistantResponse Function(AssistantResponse)? safetyOutputFilter,
   })  : _currencyService = currencyService ?? const CurrencyRecognitionService(),
@@ -49,6 +54,8 @@ class OpenetraCoordinator {
   final SafetyBloc safetyBloc;
   final DeviceResourceBloc resourceBloc;
   final SettingsBloc settingsBloc;
+  final SpeechController? speechController;
+  final NativeOfflineAsrProvider? offlineAsrProvider;
 
   final CurrencyRecognitionService _currencyService;
   AssistantResponse Function(AssistantResponse)? _safetyOutputFilter;
@@ -130,8 +137,8 @@ class OpenetraCoordinator {
       );
       _lastObservation = obs;
 
-      sceneBloc.add(ProcessSceneObservation(obs));
-      hazardBloc.add(EvaluateHazardFrame(obs));
+      sceneBloc.add(ProcessSceneObservation(obs, locale: _activeLocale));
+      hazardBloc.add(EvaluateHazardFrame(obs, locale: _activeLocale));
 
       // Wait briefly for synchronous bloc handlers in event queue.
       await Future<void>.delayed(Duration.zero);
@@ -187,7 +194,7 @@ class OpenetraCoordinator {
         task: ModelTask.hazardSpecialist,
       );
       _lastObservation = obs;
-      hazardBloc.add(EvaluateHazardFrame(obs));
+      hazardBloc.add(EvaluateHazardFrame(obs, locale: _activeLocale));
       await Future<void>.delayed(Duration.zero);
 
       final assessment = hazardBloc.state.latestAssessment;
@@ -383,6 +390,7 @@ class OpenetraCoordinator {
       final res = await _currencyService.identify(
         frame: frame,
         mirageObservation: obs,
+        locale: _activeLocale,
       );
       await _emitSpoken(
         spokenText: res.spokenAdvisory,
@@ -480,6 +488,51 @@ class OpenetraCoordinator {
           displaySummary: 'Unrecognized voice command',
           haptic: HapticPattern.caution,
         );
+    }
+  }
+
+  /// Triggers offline microphone capture gated against Openetra's own TTS.
+  Future<void> listenForOfflineVoiceCommand() async {
+    if (speechController?.shouldGateMicrophone == true ||
+        audioBloc.state.isSpeaking) {
+      await _emitSpoken(
+        spokenText: OpenetraLocalizer.micGatedNotice(_activeLocale),
+        displaySummary: 'Microphone gated during speech',
+        haptic: HapticPattern.caution,
+      );
+      return;
+    }
+
+    final asr = offlineAsrProvider;
+    if (asr == null) {
+      await _emitSpoken(
+        spokenText:
+            'Offline speech recognizer is unavailable; use the command text field or primary buttons.',
+        displaySummary: 'Offline ASR unavailable',
+        haptic: HapticPattern.caution,
+      );
+      return;
+    }
+
+    try {
+      final result = await asr.recordAndRecognizeOffline(locale: _activeLocale);
+      if (result.transcript.trim().isEmpty) {
+        await _emitSpoken(
+          spokenText: 'No speech detected. Please speak clearly after the tone.',
+          displaySummary: 'No speech detected',
+          haptic: HapticPattern.caution,
+        );
+        return;
+      }
+      await handleVoiceCommand(result.transcript);
+    } catch (e) {
+      await _emitSpoken(
+        spokenText:
+            'Offline voice pack is not installed for $_activeLocale ($e). Type a command or select a workflow button.',
+        displaySummary: 'Offline voice pack unavailable',
+        haptic: HapticPattern.caution,
+        isDegraded: true,
+      );
     }
   }
 

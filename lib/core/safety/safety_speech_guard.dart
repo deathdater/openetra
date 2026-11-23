@@ -1,4 +1,5 @@
 import '../domain/entities/entities.dart';
+import '../localization/openetra_localizer.dart';
 
 /// Deterministic safety speech filter enforcing Section 9.4 non-negotiables
 /// on every spoken response before audio output.
@@ -42,6 +43,7 @@ class SafetySpeechGuard {
   ({String text, bool wasSanitized}) sanitize(
     String input, {
     bool hasCalibratedDepth = false,
+    String locale = 'en-IN',
   }) {
     String text = input.trim();
     bool sanitized = false;
@@ -50,7 +52,7 @@ class SafetySpeechGuard {
       if (rx.hasMatch(text)) {
         text = text.replaceAll(
           rx,
-          'cannot confirm crossing safety—rely on mobility training and traffic cues',
+          OpenetraLocalizer.safetyCrossingReplacement(locale),
         );
         sanitized = true;
       }
@@ -60,14 +62,17 @@ class SafetySpeechGuard {
       if (rx.hasMatch(text)) {
         text = text.replaceAll(
           rx,
-          'no obvious hazards detected in the camera view; continue using your white cane',
+          OpenetraLocalizer.safetyClearPathReplacement(locale),
         );
         sanitized = true;
       }
     }
 
     if (!hasCalibratedDepth && _uncalibratedDistancePattern.hasMatch(text)) {
-      text = text.replaceAll(_uncalibratedDistancePattern, 'in camera view');
+      text = text.replaceAll(
+        _uncalibratedDistancePattern,
+        OpenetraLocalizer.safetyDistanceReplacement(locale),
+      );
       sanitized = true;
     }
 
@@ -75,7 +80,7 @@ class SafetySpeechGuard {
       if (rx.hasMatch(text)) {
         text = text.replaceAll(
           rx,
-          'unverified for authenticity (Openetra cannot check counterfeits)',
+          OpenetraLocalizer.currencyNonCounterfeitDisclaimer(locale),
         );
         sanitized = true;
       }
@@ -101,6 +106,7 @@ class SafetySpeechGuard {
     final result = sanitize(
       response.spokenText,
       hasCalibratedDepth: hasCalibratedDepth,
+      locale: response.locale,
     );
     if (!result.wasSanitized) return response;
     return AssistantResponse(

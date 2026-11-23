@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 import '../../../core/domain/entities/entities.dart';
+import '../../../core/localization/openetra_localizer.dart';
 import '../../scene_understanding/domain/scene_understanding_engine.dart';
 import 'hazard_taxonomy.dart';
 import 'iou_tracker.dart';
@@ -37,6 +38,7 @@ class HazardIntelligenceEngine {
     double? calibratedDepthConfidence,
     bool deviceResourceDegraded = false,
     String? deviceDegradationReason,
+    String locale = 'en-IN',
   }) {
     final now = _clock();
     final degradationReasons = <String>[];
@@ -134,6 +136,7 @@ class HazardIntelligenceEngine {
       observations: hazardObservations,
       degradedMode: degradedMode,
       degradationReasons: degradationReasons,
+      locale: locale,
     );
 
     final policyNotes = <String>[
@@ -195,18 +198,15 @@ class HazardIntelligenceEngine {
     required List<HazardObservation> observations,
     required bool degradedMode,
     required List<String> degradationReasons,
+    required String locale,
   }) {
     final buffer = StringBuffer();
     if (degradedMode) {
-      buffer.write(
-        'Caution: visibility or scanning is degraded (${degradationReasons.join(", ")}). ',
-      );
+      buffer.write('${OpenetraLocalizer.degradedNotice(degradationReasons, locale)} ');
     }
 
     if (observations.isEmpty) {
-      buffer.write(
-        'No obvious hazards detected in the camera view; continue using your white cane and caution.',
-      );
+      buffer.write(OpenetraLocalizer.noHazardsAdvisory(locale));
       return buffer.toString().trim();
     }
 
@@ -220,18 +220,8 @@ class HazardIntelligenceEngine {
           sev.index <= cached.severity.index;
       if (!withinCooldown || observations.length == 1) {
         _cooldownCache[key] = (spokenAt: now, severity: sev);
-        final prefix = switch (sev) {
-          HazardSeverity.critical => 'Urgent warning:',
-          HazardSeverity.warning => 'Caution:',
-          HazardSeverity.caution => 'Notice:',
-          HazardSeverity.info => 'Info:',
-        };
-        final looming = h.isApproaching ? ', appearing closer' : '';
-        final uncertain = h.confidenceBreakdown.detectionConfidence < 0.45
-            ? 'possible '
-            : '';
         spokenAlerts.add(
-          '$prefix $uncertain${h.label} in the ${h.relativePosition.toSpokenPhrase()}$looming',
+          OpenetraLocalizer.hazardObservationPhrase(h, sev, locale),
         );
       }
     }
@@ -239,7 +229,11 @@ class HazardIntelligenceEngine {
     if (spokenAlerts.isEmpty) {
       final top = observations.first;
       spokenAlerts.add(
-        'Ongoing hazard in view: ${top.label} in the ${top.relativePosition.toSpokenPhrase()}',
+        OpenetraLocalizer.hazardObservationPhrase(
+          top,
+          _effectiveSeverity(top),
+          locale,
+        ),
       );
     }
 

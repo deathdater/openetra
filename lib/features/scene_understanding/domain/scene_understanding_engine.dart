@@ -1,4 +1,5 @@
 import '../../../core/domain/entities/entities.dart';
+import '../../../core/localization/openetra_localizer.dart';
 
 /// Deterministic scene graph builder & accessibility-first summary generator.
 /// Never invents relationships or metric distances and always separates
@@ -15,6 +16,7 @@ class SceneUnderstandingEngine {
   SceneDescription build(
     VisionObservation observation, {
     SceneGraph? previousGraph,
+    String locale = 'en-IN',
   }) {
     final groupedNodes = _buildDeduplicatedNodes(observation);
     final groundLevelNodes = groupedNodes
@@ -65,6 +67,7 @@ class SceneUnderstandingEngine {
     final spoken = _composeSpeech(
       observation: observation,
       graph: graph,
+      locale: locale,
     );
 
     return SceneDescription(
@@ -220,11 +223,11 @@ class SceneUnderstandingEngine {
     return changes;
   }
 
-  static String _formatNodePhrase(SceneGraphNode n) {
+  static String _formatNodePhrase(SceneGraphNode n, {String locale = 'en-IN'}) {
     final label = n.instanceCount > 1
         ? '${n.instanceCount} ${_pluralize(n.name)}'
         : n.name;
-    final pos = n.relativePosition.toSpokenPhrase();
+    final pos = OpenetraLocalizer.relativePosition(n.relativePosition, locale);
     return '$label ($pos)';
   }
 
@@ -257,50 +260,64 @@ class SceneUnderstandingEngine {
   String _composeSpeech({
     required VisionObservation observation,
     required SceneGraph graph,
+    required String locale,
   }) {
     final parts = <String>[];
 
     if (observation.imageQuality.isDegraded) {
       parts.add(
-        'Image quality is limited due to ${observation.imageQuality.degradationReasons.join(" and ")}.',
+        OpenetraLocalizer.degradedNotice(
+          observation.imageQuality.degradationReasons,
+          locale,
+        ),
       );
     }
 
-    final settingClause = StringBuffer('You appear to be in a ${graph.environmentCategory}');
-    if (graph.surface != null && graph.surface!.isNotEmpty) {
-      settingClause.write(' on a ${graph.surface} surface');
-    }
-    if (graph.lighting != null && graph.lighting!.isNotEmpty) {
-      settingClause.write(' with ${graph.lighting} lighting');
-    }
-    settingClause.write('.');
-    parts.add(settingClause.toString());
+    parts.add(
+      OpenetraLocalizer.sceneIntro(
+        environment: graph.environmentCategory,
+        surface: graph.surface,
+        lighting: graph.lighting,
+        locale: locale,
+      ),
+    );
 
     final confidentNodes = graph.nodes.where((n) => !n.isUncertain).toList();
     if (confidentNodes.isNotEmpty) {
-      final topItems = confidentNodes.take(4).map(_formatNodePhrase).join(', ');
-      parts.add('Key items visible: $topItems.');
-    } else if (graph.nodes.isEmpty) {
+      final topItems = confidentNodes
+          .take(4)
+          .map((n) => _formatNodePhrase(n, locale: locale))
+          .join(', ');
+      parts.add(OpenetraLocalizer.sceneItemsLead(topItems, locale));
+    } else if (graph.nodes.isEmpty && OpenetraLocalizer.langCode(locale) == 'en') {
       parts.add('No distinct objects stood out clearly in this frame.');
     }
 
-    if (graph.relationships.isNotEmpty) {
+    if (graph.relationships.isNotEmpty &&
+        OpenetraLocalizer.langCode(locale) == 'en') {
       final rel = graph.relationships.first;
       parts.add('${rel.subjectName} is ${rel.predicate.replaceAll("_", " ")} ${rel.objectName}.');
     }
 
-    if (graph.events.isNotEmpty) {
+    if (graph.events.isNotEmpty && OpenetraLocalizer.langCode(locale) == 'en') {
       final ev = graph.events.first;
       parts.add('${ev.actorName} appears to be ${ev.action}.');
     }
 
     if (graph.readableTexts.isNotEmpty) {
-      parts.add('Visible text reads: ${graph.readableTexts.take(3).join(", ")}.');
+      parts.add(
+        OpenetraLocalizer.sceneTextLead(
+          graph.readableTexts.take(3).join(', '),
+          locale,
+        ),
+      );
     }
 
     final uncertain = graph.uncertainNodes.take(2).map((n) => n.name).toList();
     if (uncertain.isNotEmpty) {
-      parts.add('Possibly also present, with lower certainty: ${uncertain.join(", ")}.');
+      parts.add(
+        OpenetraLocalizer.sceneUncertainLead(uncertain.join(', '), locale),
+      );
     }
 
     return parts.join(' ');

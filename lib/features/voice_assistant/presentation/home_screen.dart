@@ -185,6 +185,20 @@ class _HomeScreenState extends State<HomeScreen> {
                                 );
                               },
                             ),
+                            const SizedBox(height: 12),
+                            AccessibleActionTile(
+                              title: 'Speak Voice Command (Offline Mic)',
+                              subtitle:
+                                  'Uses Silero VAD + offline recognizer (gated during TTS)',
+                              semanticHint:
+                                  'Double tap to speak a voice command offline',
+                              icon: Icons.mic,
+                              minHeight: 72,
+                              onPressed: isBusy
+                                  ? null
+                                  : () => widget.coordinator
+                                      .listenForOfflineVoiceCommand(),
+                            ),
                             const SizedBox(height: 16),
                             Row(
                               children: [

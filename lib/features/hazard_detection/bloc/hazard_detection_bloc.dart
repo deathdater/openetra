@@ -10,12 +10,17 @@ abstract class HazardDetectionEvent extends Equatable {
 }
 
 class EvaluateHazardFrame extends HazardDetectionEvent {
-  const EvaluateHazardFrame(this.observation, {this.depthMetersHint});
+  const EvaluateHazardFrame(
+    this.observation, {
+    this.depthMetersHint,
+    this.locale = 'en-IN',
+  });
   final VisionObservation observation;
   final double? depthMetersHint;
+  final String locale;
 
   @override
-  List<Object?> get props => [observation, depthMetersHint];
+  List<Object?> get props => [observation, depthMetersHint, locale];
 }
 
 class ResetHazardTracker extends HazardDetectionEvent {
@@ -39,7 +44,7 @@ class HazardDetectionState extends Equatable {
 class HazardDetectionBloc
     extends Bloc<HazardDetectionEvent, HazardDetectionState> {
   HazardDetectionBloc({
-    HazardAssessment Function(VisionObservation)? evaluator,
+    HazardAssessment Function(VisionObservation, String)? evaluator,
     void Function()? onReset,
   })  : _evaluator = evaluator,
         _onReset = onReset,
@@ -48,11 +53,11 @@ class HazardDetectionBloc
     on<ResetHazardTracker>(_onResetTracker);
   }
 
-  HazardAssessment Function(VisionObservation)? _evaluator;
+  HazardAssessment Function(VisionObservation, String)? _evaluator;
   void Function()? _onReset;
 
   void attachEngine({
-    required HazardAssessment Function(VisionObservation) evaluator,
+    required HazardAssessment Function(VisionObservation, String) evaluator,
     required void Function() onReset,
   }) {
     _evaluator = evaluator;
@@ -64,7 +69,7 @@ class HazardDetectionBloc
     Emitter<HazardDetectionState> emit,
   ) {
     final assessment = _evaluator != null
-        ? _evaluator!(event.observation)
+        ? _evaluator!(event.observation, event.locale)
         : HazardAssessment(
             assessmentId: event.observation.provenance.observationId,
             timestamp: DateTime.now(),
