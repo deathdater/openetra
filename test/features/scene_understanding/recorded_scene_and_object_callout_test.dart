@@ -486,7 +486,7 @@ void main() {
     final fields = find.byType(TextField);
     await tester.enterText(fields.last, 'Keys near window');
     await tester.tap(find.text('Save & Speak'));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 120)));
     await tester.pumpAndSettle();
 
     expect(find.text('Note: Keys near window'), findsOneWidget);

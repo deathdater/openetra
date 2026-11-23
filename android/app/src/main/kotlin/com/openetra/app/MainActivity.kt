@@ -8,6 +8,7 @@ import com.openetra.app.floating.FloatingCompanionPlugin
 import com.openetra.app.floating.FloatingCompanionService
 import com.openetra.app.gesture.HandGesturePlugin
 import com.openetra.app.haptics.HapticsPlugin
+import com.openetra.app.local_intelligence.LocalIntelligencePlugin
 import com.openetra.app.mirage.MirageEnginePlugin
 import com.openetra.app.ocr.IndicOcrPlugin
 import com.openetra.app.resources.DeviceResourcePlugin
@@ -28,6 +29,7 @@ class MainActivity : FlutterActivity() {
     private var flashlightPlugin: FlashlightPlugin? = null
     private var handGesturePlugin: HandGesturePlugin? = null
     private var floatingCompanionPlugin: FloatingCompanionPlugin? = null
+    private var localIntelligencePlugin: LocalIntelligencePlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -44,6 +46,7 @@ class MainActivity : FlutterActivity() {
         flashlightPlugin = FlashlightPlugin(applicationContext, cam, messenger)
         handGesturePlugin = HandGesturePlugin(applicationContext, messenger)
         floatingCompanionPlugin = FloatingCompanionPlugin(applicationContext, messenger)
+        localIntelligencePlugin = LocalIntelligencePlugin(applicationContext, messenger)
         forwardAssistiveIntent(intent)
     }
 
@@ -62,6 +65,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        localIntelligencePlugin?.dispose()
         floatingCompanionPlugin?.release()
         handGesturePlugin?.release()
         flashlightPlugin?.release()

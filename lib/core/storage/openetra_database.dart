@@ -6,6 +6,8 @@ import '../assistive/assistive_action_router.dart';
 import '../assistive/custom_gesture_record.dart';
 import '../domain/entities/entities.dart';
 import '../errors/openetra_failure.dart';
+import '../../features/local_intelligence/domain/local_intelligence_config.dart';
+import '../../features/local_intelligence/domain/operation_history_event.dart';
 import '../../features/scene_understanding/domain/recorded_scene_memory.dart';
 import '../../features/shopping/domain/shopping_assistant_service.dart';
 
@@ -56,7 +58,7 @@ class OpenetraDatabase {
   OpenetraDatabase._(this._db);
 
   final Database _db;
-  static const int schemaVersion = 4;
+  static const int schemaVersion = 5;
 
   /// Opens or creates the local database. Pass [factory] (e.g. sqflite_common_ffi)
   /// and [dbPath] (`inMemoryDatabasePath`) for deterministic host unit tests.
@@ -81,6 +83,7 @@ class OpenetraDatabase {
             await _seedInitialProducts(database);
             await _createAssistiveTables(database);
             await _createRecordedScenesTable(database);
+            await _createLocalIntelligenceTables(database);
           },
           onUpgrade: (database, oldVersion, newVersion) async {
             if (oldVersion < 2) {
@@ -92,6 +95,9 @@ class OpenetraDatabase {
             }
             if (oldVersion < 4) {
               await _createRecordedScenesTable(database);
+            }
+            if (oldVersion < 5) {
+              await _createLocalIntelligenceTables(database);
             }
           },
         ),
@@ -862,6 +868,196 @@ class OpenetraDatabase {
     await _db.delete('recorded_scenes', where: 'id = ?', whereArgs: [id]);
   }
 
+  static Future<void> _createLocalIntelligenceTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS operation_history_events (
+        event_id TEXT PRIMARY KEY,
+        schema_version INTEGER NOT NULL,
+        operation_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        started_at_ms INTEGER NOT NULL,
+        completed_at_ms INTEGER NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        sanitized_summary TEXT NOT NULL,
+        metadata_json TEXT NOT NULL,
+        model_id TEXT,
+        language TEXT NOT NULL,
+        initiator TEXT NOT NULL,
+        error_category TEXT,
+        expires_at_ms INTEGER
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_op_history_completed
+      ON operation_history_events (completed_at_ms DESC)
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS local_intelligence_models (
+        model_id TEXT PRIMARY KEY,
+        version TEXT NOT NULL,
+        local_path TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        verified_at_ms INTEGER NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> insertOperationHistoryEvent(OperationHistoryEvent event) async {
+    await _db.insert(
+      'operation_history_events',
+      event.toDbRow(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<OperationHistoryEvent>> queryOperationHistory({
+    OperationType? type,
+    OperationStatus? status,
+    DateTime? since,
+    DateTime? until,
+    String? search,
+    int limit = 200,
+  }) async {
+    final whereClauses = <String>[];
+    final args = <Object?>[];
+    if (type != null) {
+      whereClauses.add('operation_type = ?');
+      args.add(type.name);
+    }
+    if (status != null) {
+      whereClauses.add('status = ?');
+      args.add(status.name);
+    }
+    if (since != null) {
+      whereClauses.add('completed_at_ms >= ?');
+      args.add(since.millisecondsSinceEpoch);
+    }
+    if (until != null) {
+      whereClauses.add('completed_at_ms <= ?');
+      args.add(until.millisecondsSinceEpoch);
+    }
+    if (search != null && search.trim().isNotEmpty) {
+      whereClauses.add('LOWER(sanitized_summary) LIKE ?');
+      args.add('%${search.trim().toLowerCase()}%');
+    }
+
+    final rows = await _db.query(
+      'operation_history_events',
+      where: whereClauses.isEmpty ? null : whereClauses.join(' AND '),
+      whereArgs: args.isEmpty ? null : args,
+      orderBy: 'completed_at_ms DESC',
+      limit: limit,
+    );
+    return rows.map(OperationHistoryEvent.fromDbRow).toList();
+  }
+
+  Future<int> pruneExpiredOperationHistory({DateTime? now}) async {
+    final cutoffMs = (now ?? DateTime.now()).millisecondsSinceEpoch;
+    return _db.delete(
+      'operation_history_events',
+      where: 'expires_at_ms IS NOT NULL AND expires_at_ms < ?',
+      whereArgs: [cutoffMs],
+    );
+  }
+
+  Future<void> clearOperationHistory() async {
+    await _db.delete('operation_history_events');
+  }
+
+  Future<LocalIntelligenceConfig> loadLocalIntelligenceConfig() async {
+    final en = await getAssistivePreference(LocalIntelligenceConfig.prefEnabled);
+    final hist =
+        await getAssistivePreference(LocalIntelligenceConfig.prefHistoryEnabled);
+    final sum = await getAssistivePreference(
+      LocalIntelligenceConfig.prefSummariesEnabled,
+    );
+    final wifi =
+        await getAssistivePreference(LocalIntelligenceConfig.prefWifiOnly);
+    final ret =
+        await getAssistivePreference(LocalIntelligenceConfig.prefRetentionDays);
+    final model =
+        await getAssistivePreference(LocalIntelligenceConfig.prefActiveModelId);
+    final priv = await getAssistivePreference(
+      LocalIntelligenceConfig.prefPrivacyAccepted,
+    );
+    return LocalIntelligenceConfig(
+      enabled: en == 'true',
+      historyEnabled: hist == 'true',
+      summariesEnabled: sum == 'true',
+      wifiOnlyDownload: wifi == null ? true : wifi == 'true',
+      retentionDays: int.tryParse(ret ?? '') ?? HistoryRetentionOptions.thirtyDays,
+      activeModelId: (model != null && model.isNotEmpty) ? model : null,
+      privacyNoticeAccepted: priv == 'true',
+    );
+  }
+
+  Future<void> saveLocalIntelligenceConfig(LocalIntelligenceConfig cfg) async {
+    await setAssistivePreference(
+      LocalIntelligenceConfig.prefEnabled,
+      cfg.enabled.toString(),
+    );
+    await setAssistivePreference(
+      LocalIntelligenceConfig.prefHistoryEnabled,
+      cfg.historyEnabled.toString(),
+    );
+    await setAssistivePreference(
+      LocalIntelligenceConfig.prefSummariesEnabled,
+      cfg.summariesEnabled.toString(),
+    );
+    await setAssistivePreference(
+      LocalIntelligenceConfig.prefWifiOnly,
+      cfg.wifiOnlyDownload.toString(),
+    );
+    await setAssistivePreference(
+      LocalIntelligenceConfig.prefRetentionDays,
+      cfg.retentionDays.toString(),
+    );
+    await setAssistivePreference(
+      LocalIntelligenceConfig.prefActiveModelId,
+      cfg.activeModelId ?? '',
+    );
+    await setAssistivePreference(
+      LocalIntelligenceConfig.prefPrivacyAccepted,
+      cfg.privacyNoticeAccepted.toString(),
+    );
+  }
+
+  Future<void> upsertInstalledLocalModel({
+    required String modelId,
+    required String version,
+    required String localPath,
+    required String sha256,
+    required int sizeBytes,
+    required String status,
+  }) async {
+    await _db.insert(
+      'local_intelligence_models',
+      {
+        'model_id': modelId,
+        'version': version,
+        'local_path': localPath,
+        'sha256': sha256,
+        'size_bytes': sizeBytes,
+        'status': status,
+        'verified_at_ms': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<Map<String, Object?>>> listInstalledLocalModels() =>
+      _db.query('local_intelligence_models', orderBy: 'verified_at_ms DESC');
+
+  Future<void> deleteInstalledLocalModel(String modelId) async {
+    await _db.delete(
+      'local_intelligence_models',
+      where: 'model_id = ?',
+      whereArgs: [modelId],
+    );
+  }
+
   /// User-controlled atomic deletion of personal data, history, scanned docs, and safety logs.
   Future<void> deleteAllUserData() async {
     await _db.transaction((txn) async {
@@ -874,6 +1070,7 @@ class OpenetraDatabase {
       await txn.delete('assistive_preferences');
       await txn.delete('custom_gestures');
       await txn.delete('recorded_scenes');
+      await txn.delete('operation_history_events');
       await txn.delete(
         'local_products',
         where: 'source != ?',

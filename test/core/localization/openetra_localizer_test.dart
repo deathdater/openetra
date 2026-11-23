@@ -177,7 +177,7 @@ void main() {
 
   test('DialLocalizer localizes all dial menus, options, prompts, and errors across all 7 Indian languages without English leakage', () {
     final tree = OpenetraDialMenuTree.buildDefaultTree();
-    final indicLocales = const ['hi-IN', 'kn-IN', 'ta-IN', 'te-IN', 'ml-IN', 'mr-IN', 'bn-IN'];
+    const indicLocales = ['hi-IN', 'kn-IN', 'ta-IN', 'te-IN', 'ml-IN', 'mr-IN', 'bn-IN'];
 
     for (final locale in indicLocales) {
       for (final node in tree.values) {

@@ -23,6 +23,9 @@ import '../features/flashlight/domain/intelligent_flashlight_controller.dart';
 import '../features/floating_companion/bloc/floating_companion_bloc.dart';
 import '../features/gestures/bloc/gesture_automation_bloc.dart';
 import '../features/hazard_detection/bloc/hazard_detection_bloc.dart';
+import '../features/local_intelligence/bloc/local_intelligence_bloc.dart';
+import '../features/local_intelligence/domain/operation_history_collector.dart';
+import '../features/local_intelligence/domain/operation_history_event.dart';
 import '../features/navigation/domain/navigation_cue_service.dart';
 import '../features/object_memory/bloc/object_memory_bloc.dart';
 import '../features/scene_understanding/bloc/scene_understanding_bloc.dart';
@@ -61,6 +64,8 @@ class OpenetraCoordinator {
     this.flashlightController,
     this.gestureBloc,
     this.floatingCompanionBloc,
+    this.localIntelligenceBloc,
+    this.historyCollector,
     ShoppingAssistantService? shoppingService,
     CurrencyRecognitionService? currencyService,
     AssistantResponse Function(AssistantResponse)? safetyOutputFilter,
@@ -92,6 +97,8 @@ class OpenetraCoordinator {
   final IntelligentFlashlightController? flashlightController;
   final GestureAutomationBloc? gestureBloc;
   final FloatingCompanionBloc? floatingCompanionBloc;
+  final LocalIntelligenceBloc? localIntelligenceBloc;
+  final OperationHistoryCollector? historyCollector;
 
   final ShoppingAssistantService _shoppingService;
   final CurrencyRecognitionService _currencyService;
@@ -266,8 +273,19 @@ class OpenetraCoordinator {
     return cameraSource.captureFrame();
   }
 
+  /// Speaks an informational or historical summary notice through the existing
+  /// sequential speech queue without altering core vision workflows.
+  Future<void> speakPlainNotice(String text) async {
+    await _emitSpoken(
+      spokenText: text,
+      displaySummary: text,
+      haptic: HapticPattern.confirm,
+    );
+  }
+
   /// Workflow A: Describe Surroundings
   Future<void> runDescribeSurroundings({CapturedFrame? overrideFrame}) async {
+    final startedAt = DateTime.now();
     try {
       await resourceBloc.resourceManager.refreshTelemetry();
       final frame = await _captureOrReuseFrame(overrideFrame: overrideFrame);
@@ -322,8 +340,9 @@ class OpenetraCoordinator {
         buffer.write(' ${resourceBloc.state.resourceState.degradationMessage}');
       }
 
+      final spokenFinal = buffer.toString().trim();
       await _emitSpoken(
-        spokenText: buffer.toString().trim(),
+        spokenText: spokenFinal,
         displaySummary: desc?.spokenSummary ?? 'Scene description ready',
         priority: (hazard?.overallSeverity == HazardSeverity.critical)
             ? SpeechPriority.critical
@@ -336,7 +355,27 @@ class OpenetraCoordinator {
         isDegraded: degraded,
         sourceObservationId: obs.provenance.observationId,
       );
+      historyCollector?.recordNonBlocking(
+        type: OperationType.sceneDescription,
+        status: OperationStatus.completed,
+        rawSummary: desc?.spokenSummary ?? spokenFinal,
+        startedAt: startedAt,
+        language: _activeLocale,
+        modelId: obs.provenance.modelId,
+        metadata: {
+          if (obs.setting != null) 'environment': obs.setting!,
+          'itemCount': '${obs.objects.length}',
+        },
+      );
     } catch (e) {
+      historyCollector?.recordNonBlocking(
+        type: OperationType.sceneDescription,
+        status: OperationStatus.failed,
+        rawSummary: 'Scene description could not complete.',
+        startedAt: startedAt,
+        language: _activeLocale,
+        errorCategory: e.runtimeType.toString(),
+      );
       await _emitSpoken(
         spokenText: DialLocalizer.sceneAnalysisError(_activeLocale),
         displaySummary: 'Scene analysis error',
@@ -619,6 +658,7 @@ class OpenetraCoordinator {
 
   /// Workflow C: Read Text (Latin + Indic script routing)
   Future<void> runSmartReader({CapturedFrame? overrideFrame}) async {
+    final startedAt = DateTime.now();
     try {
       resourceBloc.add(const ChangeOperatingMode(OperatingMode.reading));
       final frame = await _captureOrReuseFrame(overrideFrame: overrideFrame);
@@ -663,7 +703,26 @@ class OpenetraCoordinator {
         displaySummary: result.fullText,
         sourceObservationId: obs.provenance.observationId,
       );
+      // Privacy-safe OCR history: record script & completion metadata, NEVER full OCR dump.
+      historyCollector?.recordNonBlocking(
+        type: OperationType.textReading,
+        status: OperationStatus.completed,
+        rawSummary:
+            'Read visible text (${result.detectedScript.name} script, ${result.fullText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length} words).',
+        startedAt: startedAt,
+        language: _activeLocale,
+        modelId: result.provenance.modelId,
+        metadata: {'script': result.detectedScript.name},
+      );
     } catch (e) {
+      historyCollector?.recordNonBlocking(
+        type: OperationType.textReading,
+        status: OperationStatus.failed,
+        rawSummary: 'Text reading could not complete.',
+        startedAt: startedAt,
+        language: _activeLocale,
+        errorCategory: e.runtimeType.toString(),
+      );
       await _emitSpoken(
         spokenText: DialLocalizer.textReadError(_activeLocale),
         displaySummary: 'Text reading failed',

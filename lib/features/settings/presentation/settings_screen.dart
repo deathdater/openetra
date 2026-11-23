@@ -16,6 +16,7 @@ import '../../floating_companion/bloc/floating_companion_bloc.dart';
 import '../../floating_companion/presentation/floating_widget_settings_screen.dart';
 import '../../gestures/bloc/gesture_automation_bloc.dart';
 import '../../gestures/presentation/gesture_automation_screen.dart';
+import '../../local_intelligence/presentation/local_intelligence_settings_screen.dart';
 import '../bloc/settings_bloc.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -308,6 +309,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             builder: (_) => BlocProvider.value(
                               value: widget.gestureBloc!,
                               child: const GestureAutomationScreen(),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (widget.coordinator?.localIntelligenceBloc != null) ...[
+                    AccessibleActionTile(
+                      title: 'Local Intelligence (Beta)',
+                      subtitle:
+                          'Optional on-device activity history, local summaries & LiteRT-LM models (off by default)',
+                      semanticHint:
+                          'Double tap to configure optional Local Intelligence Beta settings',
+                      icon: Icons.psychology_outlined,
+                      onPressed: () {
+                        final liBloc = widget.coordinator!.localIntelligenceBloc!;
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => BlocProvider.value(
+                              value: liBloc,
+                              child: LocalIntelligenceSettingsScreen(
+                                onSpeakText: widget.coordinator!.speakPlainNotice,
+                              ),
                             ),
                           ),
                         );

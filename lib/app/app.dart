@@ -38,6 +38,10 @@ import '../features/gestures/bloc/gesture_automation_bloc.dart';
 import '../features/gestures/data/native_gesture_gateway.dart';
 import '../features/hazard_detection/bloc/hazard_detection_bloc.dart';
 import '../features/hazard_detection/domain/hazard_intelligence_engine.dart';
+import '../features/local_intelligence/bloc/local_intelligence_bloc.dart';
+import '../features/local_intelligence/domain/local_llm_engine.dart';
+import '../features/local_intelligence/domain/operation_history_collector.dart';
+import '../features/local_intelligence/domain/summary_orchestrator.dart';
 import '../features/model_manager/bloc/model_manager_bloc.dart';
 import '../features/object_memory/bloc/object_memory_bloc.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
@@ -92,6 +96,7 @@ class OpenetraDependencies {
     required this.floatingCompanionBloc,
     required this.hapticManager,
     required this.dialBloc,
+    required this.localIntelligenceBloc,
   });
 
   final OpenetraDatabase database;
@@ -128,6 +133,7 @@ class OpenetraDependencies {
   final FloatingCompanionBloc floatingCompanionBloc;
   final HapticFeedbackManager hapticManager;
   final AssistiveDialBloc dialBloc;
+  final LocalIntelligenceBloc localIntelligenceBloc;
 
   static Future<OpenetraDependencies> bootstrap({
     required OpenetraDatabase database,
@@ -136,6 +142,7 @@ class OpenetraDependencies {
     DeviceResourceManager? resourceManager,
     ProtectedContactStore? contactStore,
     FlashlightGateway? flashlightGateway,
+    LocalLlmEngine? localLlmEngine,
     bool enablePlatformTts = true,
   }) async {
     final registry = AIModelRegistry();
@@ -267,6 +274,24 @@ class OpenetraDependencies {
       database: database,
     );
 
+    final llmEngine = localLlmEngine ?? NativeLocalLlmEngine();
+    final summaryOrchestrator = SummaryOrchestrator(
+      database: database,
+      llmEngine: llmEngine,
+      isPrimaryOperationBusy: () =>
+          taskOrchestrator.currentSnapshot.isBusy ||
+          emergencyBloc.state.awaitingConfirmation,
+    );
+    final localIntelligenceBloc = LocalIntelligenceBloc(
+      database: database,
+      llmEngine: llmEngine,
+      summaryOrchestrator: summaryOrchestrator,
+    );
+    final historyCollector = OperationHistoryCollector(
+      database: database,
+      configProvider: () => localIntelligenceBloc.state.config,
+    );
+
     final coordinator = OpenetraCoordinator(
       orchestrator: orchestrator,
       cameraSource: cam,
@@ -292,6 +317,8 @@ class OpenetraDependencies {
       flashlightController: flashlightController,
       gestureBloc: gestureBloc,
       floatingCompanionBloc: floatingCompanionBloc,
+      localIntelligenceBloc: localIntelligenceBloc,
+      historyCollector: historyCollector,
       shoppingService: shoppingService,
       currencyService: currencyService,
       safetyOutputFilter: (r) => safetyPolicy.enforceResponse(r),
@@ -325,6 +352,7 @@ class OpenetraDependencies {
     emergencyBloc.add(const LoadEmergencyConfig());
     gestureBloc.add(const LoadGestureConfig());
     floatingCompanionBloc.add(const LoadFloatingCompanionConfig());
+    localIntelligenceBloc.add(const LoadLocalIntelligence());
     await flashlightController.initialize();
 
     return OpenetraDependencies(
@@ -361,6 +389,7 @@ class OpenetraDependencies {
       floatingCompanionBloc: floatingCompanionBloc,
       hapticManager: hapticManager,
       dialBloc: dialBloc,
+      localIntelligenceBloc: localIntelligenceBloc,
     );
   }
 
@@ -528,6 +557,7 @@ class _OpenetraAppState extends State<OpenetraApp> {
         BlocProvider.value(value: widget.deps.gestureBloc),
         BlocProvider.value(value: widget.deps.floatingCompanionBloc),
         BlocProvider.value(value: widget.deps.dialBloc),
+        BlocProvider.value(value: widget.deps.localIntelligenceBloc),
       ],
       child: BlocBuilder<SettingsBloc, SettingsState>(
         buildWhen: (prev, curr) => prev.themeMode != curr.themeMode,
