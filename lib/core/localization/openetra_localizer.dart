@@ -503,4 +503,101 @@ class OpenetraLocalizer {
 
     return parts.join(' ');
   }
+
+  /// Exposes localized spatial zone formatting for recorded scene playback.
+  static String indicZoneBreakdown(
+    String zone,
+    List<SceneGraphNode> nodes,
+    String lang,
+  ) =>
+      _indicZoneSentence(zone, nodes, lang);
+
+  /// Calls out a recognized registered personal object naturally in all 8 languages.
+  static String registeredObjectSpotted({
+    required String objectName,
+    required String zone,
+    required String locale,
+  }) {
+    final lang = langCode(locale);
+    switch (lang) {
+      case 'hi':
+        final z = switch (zone) {
+          'ahead' => 'आपके ठीक सामने',
+          'left' => 'आपकी बाईं ओर',
+          'right' => 'आपकी दाईं ओर',
+          _ => 'ऊपर की ओर',
+        };
+        return 'आपकी सहेजी गई वस्तु $objectName $z दिखाई दी।';
+      case 'kn':
+        final z = switch (zone) {
+          'ahead' => 'ನಿಮ್ಮ ನೇರ ಮುಂದೆ',
+          'left' => 'ನಿಮ್ಮ ಎಡಭಾಗದಲ್ಲಿ',
+          'right' => 'ನಿಮ್ಮ ಬಲಭಾಗದಲ್ಲಿ',
+          _ => 'ಮೇಲ್ಭಾಗದಲ್ಲಿ',
+        };
+        return 'ನಿಮ್ಮ ನೋಂದಾಯಿತ ವಸ್ತು $objectName $z ಕಾಣಿಸಿದೆ.';
+      case 'ta':
+        final z = switch (zone) {
+          'ahead' => 'உங்கள் நேர் முன்னால்',
+          'left' => 'உங்கள் இடதுபுறத்தில்',
+          'right' => 'உங்கள் வலதுபுறத்தில்',
+          _ => 'மேலே',
+        };
+        return 'நீங்கள் பதிவு செய்த $objectName $z தெரிகிறது.';
+      case 'te':
+        final z = switch (zone) {
+          'ahead' => 'మీ నేరుగా ముందు',
+          'left' => 'మీ ఎడమవైపు',
+          'right' => 'మీ కుడివైపు',
+          _ => 'పైభాగంలో',
+        };
+        return 'మీరు నమోదు చేసిన $objectName $z కనిపించింది.';
+      case 'ml':
+        final z = switch (zone) {
+          'ahead' => 'നിങ്ങളുടെ നേരെ മുന്നിൽ',
+          'left' => 'നിങ്ങളുടെ ഇടതുവശത്ത്',
+          'right' => 'നിങ്ങളുടെ வலതുവശത്ത്',
+          _ => 'മുകളിൽ',
+        };
+        return 'നിങ്ങൾ രജിസ്റ്റർ ചെയ്ത $objectName $z കാണുന്നുണ്ട്.';
+      case 'mr':
+        final z = switch (zone) {
+          'ahead' => 'तुमच्या अगदी समोर',
+          'left' => 'तुमच्या डाव्या बाजूला',
+          'right' => 'तुमच्या उजव्या बाजूला',
+          _ => 'वरच्या बाजूला',
+        };
+        return 'तुमची नोंदणीकृत वस्तू $objectName $z दिसली आहे.';
+      case 'bn':
+        final z = switch (zone) {
+          'ahead' => 'আপনার ঠিক সামনে',
+          'left' => 'আপনার বাম দিকে',
+          'right' => 'আপনার ডান দিকে',
+          _ => 'উপরের দিকে',
+        };
+        return 'আপনার সংরক্ষিত $objectName $z দেখা গেছে।';
+      default:
+        final z = switch (zone) {
+          'ahead' => 'directly ahead of you',
+          'left' => 'to your left',
+          'right' => 'on your right',
+          _ => 'overhead',
+        };
+        return 'Your registered $objectName was spotted $z.';
+    }
+  }
+
+  /// Speaks the user's custom saved modification note in their active language.
+  static String customNoteSpoken(String note, String locale) {
+    return switch (langCode(locale)) {
+      'hi' => 'आपका सहेजा गया नोट: $note।',
+      'kn' => 'ನಿಮ್ಮ ಉಳಿಸಿದ ಟಿಪ್ಪಣಿ: $note.',
+      'ta' => 'உங்கள் சேமித்த குறிப்பு: $note.',
+      'te' => 'మీరు సేవ్ చేసిన నోట్: $note.',
+      'ml' => 'നിങ്ങളുടെ സേവ് ചെയ്ത കുറിപ്പ്: $note.',
+      'mr' => 'तुमची जतन केलेली नोंद: $note.',
+      'bn' => 'আপনার সংরক্ষিত নোট: $note।',
+      _ => 'Your saved note: $note.',
+    };
+  }
 }

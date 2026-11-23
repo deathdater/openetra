@@ -9,6 +9,7 @@ import '../../../floating_companion/presentation/floating_widget_settings_screen
 import '../../../gestures/presentation/gesture_automation_screen.dart';
 import '../../../model_manager/presentation/model_manager_screen.dart';
 import '../../../object_memory/presentation/object_memory_screen.dart';
+import '../../../scene_understanding/presentation/scene_memory_screen.dart';
 import '../../../settings/bloc/settings_bloc.dart';
 import '../../../settings/presentation/settings_screen.dart';
 import '../../../shopping/presentation/shopping_screen.dart';
@@ -75,6 +76,8 @@ class _AssistiveDialPageState extends State<AssistiveDialPage> {
           onFindObjectRequested: coord.runFindObject,
           onCaptureAndSaveRequested: coord.registerPersonalObjectWithCamera,
         );
+      case DialScreenRoute.sceneMemory:
+        destination = SceneMemoryScreen(coordinator: coord);
       case DialScreenRoute.shoppingAssistant:
         destination = ShoppingScreen(
           coordinator: coord,

@@ -25,6 +25,8 @@ import '../features/hazard_detection/bloc/hazard_detection_bloc.dart';
 import '../features/navigation/domain/navigation_cue_service.dart';
 import '../features/object_memory/bloc/object_memory_bloc.dart';
 import '../features/scene_understanding/bloc/scene_understanding_bloc.dart';
+import '../features/scene_understanding/domain/recorded_scene_memory.dart';
+import '../features/scene_understanding/domain/registered_object_scene_matcher.dart';
 import '../features/settings/bloc/settings_bloc.dart';
 import '../features/shopping/domain/shopping_assistant_service.dart';
 import '../features/smart_reader/bloc/smart_reader_bloc.dart';
@@ -92,6 +94,10 @@ class OpenetraCoordinator {
 
   final ShoppingAssistantService _shoppingService;
   final CurrencyRecognitionService _currencyService;
+  final RegisteredObjectSceneMatcher _registeredMatcher =
+      const RegisteredObjectSceneMatcher();
+  final RecordedSceneAggregator _sceneAggregator =
+      const RecordedSceneAggregator();
   AssistantResponse Function(AssistantResponse)? _safetyOutputFilter;
   static const _uuid = Uuid();
 
@@ -286,6 +292,24 @@ class OpenetraCoordinator {
       }
       buffer.write(desc?.spokenSummary ?? 'Scene analyzed.');
 
+      // Relate live/continuous scene to locally stored registered personal items.
+      final regMatches = await _registeredMatcher.matchInObservation(
+        observation: obs,
+        database: database,
+        frame: frame,
+        embeddingProvider: orchestrator.embeddingProvider,
+      );
+      for (final match in regMatches.take(2)) {
+        buffer.write(' ');
+        buffer.write(
+          OpenetraLocalizer.registeredObjectSpotted(
+            objectName: match.objectName,
+            zone: match.zone,
+            locale: _activeLocale,
+          ),
+        );
+      }
+
       final degraded = obs.imageQuality.isDegraded ||
           resourceBloc.state.resourceState.isDegradedCapability;
       if (resourceBloc.state.resourceState.degradationMessage != null) {
@@ -369,6 +393,118 @@ class OpenetraCoordinator {
         }
       }
     }));
+  }
+
+  /// Records a multi-frame scene pan, analyzes each sampled keyframe offline
+  /// with Mirage + registered personal object matching, fuses them into one
+  /// holistic [RecordedSceneRecord] stored in SQLite (no raw video saved on
+  /// disk), and speaks the complete breakdown in the active language.
+  Future<RecordedSceneRecord> recordAndSaveSceneClip({
+    String title = '',
+    String? customNote,
+    int sampleFrames = 4,
+    Duration sampleGap = const Duration(milliseconds: 900),
+    List<CapturedFrame>? overrideFrames,
+    void Function(int captured, int total)? onProgress,
+  }) async {
+    final framesToProcess = overrideFrames != null && overrideFrames.isNotEmpty
+        ? overrideFrames
+        : <CapturedFrame>[];
+    final total = overrideFrames != null && overrideFrames.isNotEmpty
+        ? overrideFrames.length
+        : sampleFrames.clamp(2, 8);
+
+    final observations = <VisionObservation>[];
+    final allRegMatches = <RecognizedRegisteredMatch>[];
+
+    for (var i = 0; i < total; i++) {
+      final frame = framesToProcess.isNotEmpty
+          ? framesToProcess[i]
+          : await _captureOrReuseFrame();
+      final obs = await orchestrator.runVisualPerception(
+        frame,
+        task: ModelTask.scenePerception,
+      );
+      observations.add(obs);
+      _lastObservation = obs;
+
+      final regMatches = await _registeredMatcher.matchInObservation(
+        observation: obs,
+        database: database,
+        frame: frame,
+        embeddingProvider: orchestrator.embeddingProvider,
+      );
+      allRegMatches.addAll(regMatches);
+      onProgress?.call(i + 1, total);
+
+      if (i + 1 < total &&
+          framesToProcess.isEmpty &&
+          sampleGap > Duration.zero) {
+        await Future<void>.delayed(sampleGap);
+      }
+    }
+
+    if (framesToProcess.isEmpty) {
+      if (cameraResourceManager != null) {
+        await cameraResourceManager!.forceReleaseAll();
+      } else {
+        await cameraSource.stop();
+      }
+      await flashlightController?.endAuthorizedTaskSession();
+    }
+
+    final record = _sceneAggregator.aggregate(
+      id: _uuid.v4(),
+      title: title,
+      observations: observations,
+      registeredMatches: allRegMatches,
+      customNote: customNote,
+    );
+    await database.upsertRecordedScene(record);
+
+    final spoken = record.buildSpokenBreakdown(_activeLocale);
+    await _emitSpoken(
+      spokenText: spoken,
+      displaySummary: 'Saved scene: ${record.title}',
+      haptic: HapticPattern.confirm,
+    );
+    return record;
+  }
+
+  Future<List<RecordedSceneRecord>> listRecordedScenes() =>
+      database.listRecordedScenes();
+
+  Future<void> speakRecordedScene(RecordedSceneRecord record) async {
+    final spoken = record.buildSpokenBreakdown(_activeLocale);
+    await _emitSpoken(
+      spokenText: spoken,
+      displaySummary: record.title,
+      haptic: HapticPattern.confirm,
+    );
+  }
+
+  Future<void> updateRecordedSceneNote(
+    String id, {
+    String? title,
+    String? customNote,
+    bool speakUpdated = false,
+  }) async {
+    await database.updateRecordedSceneNote(
+      id,
+      title: title,
+      customNote: customNote,
+    );
+    if (speakUpdated) {
+      final all = await database.listRecordedScenes();
+      final match = all.where((r) => r.id == id);
+      if (match.isNotEmpty) {
+        await speakRecordedScene(match.first);
+      }
+    }
+  }
+
+  Future<void> deleteRecordedScene(String id) async {
+    await database.deleteRecordedScene(id);
   }
 
   /// Workflow B: Hazard Awareness (single scan or continuous loop toggle)

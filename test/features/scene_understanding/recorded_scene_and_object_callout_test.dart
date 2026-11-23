@@ -1,0 +1,494 @@
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openetra/app/app.dart';
+import 'package:openetra/core/domain/entities/entities.dart';
+import 'package:openetra/core/inference/model_provider.dart';
+import 'package:openetra/core/storage/openetra_database.dart';
+import 'package:openetra/features/scene_understanding/domain/recorded_scene_memory.dart';
+import 'package:openetra/features/scene_understanding/domain/registered_object_scene_matcher.dart';
+import 'package:openetra/features/scene_understanding/presentation/scene_memory_screen.dart';
+import 'package:openetra/features/settings/bloc/settings_bloc.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+class _StubEmbeddingProvider implements EmbeddingProvider {
+  _StubEmbeddingProvider(this.vector);
+  final List<double> vector;
+
+  @override
+  String get modelId => 'stub-embed';
+
+  @override
+  Future<bool> get isAvailable async => true;
+
+  @override
+  Future<List<double>?> computeEmbedding(
+    CapturedFrame frame,
+    BoundingBox crop,
+  ) async =>
+      vector;
+}
+
+class _StubVisionProvider implements VisionInferenceProvider {
+  _StubVisionProvider(this._observations);
+  final List<VisionObservation> _observations;
+  int _idx = 0;
+
+  @override
+  String get modelId => 'stub-mirage';
+
+  @override
+  bool get isLoaded => true;
+
+  @override
+  Future<ModelPerformance> load({int threads = 0}) async => ModelPerformance(
+        modelId: 'stub-mirage',
+        measuredLatencyMs: 25,
+        coldLoadMs: 10,
+        inputWidth: 64,
+        inputHeight: 64,
+        deviceTier: 'test',
+        recordedAt: DateTime(2026, 11, 23, 18, 0, 0),
+      );
+
+  @override
+  Future<void> unload() async {}
+
+  @override
+  Future<VisionObservation> analyze(
+    CapturedFrame frame, {
+    required MirageQueryProfile profile,
+    List<String>? keywords,
+  }) async {
+    final obs = _observations[_idx % _observations.length];
+    _idx++;
+    return obs;
+  }
+}
+
+CapturedFrame _sampleFrame(String id) => CapturedFrame(
+      width: 64,
+      height: 64,
+      capturedAt: DateTime(2026, 11, 23, 18, 0, 0),
+      qualityMetrics: ImageQualityMetrics.nominal,
+      rgbBytes: Uint8List(64 * 64 * 3),
+    );
+
+VisionObservation _sampleObservation({
+  required String id,
+  required String setting,
+  required List<ObjectDetection> objects,
+  List<PerceivedTextSpan> textSpans = const [],
+}) {
+  return VisionObservation(
+    sceneMetadata: {'setting': setting, 'lighting': 'well lit'},
+    objects: objects,
+    textSpans: textSpans,
+    imageQuality: ImageQualityMetrics.nominal,
+    provenance: ObservationProvenance(
+      observationId: id,
+      timestamp: DateTime(2026, 11, 23, 18, 0, 0),
+      modelId: 'stub-mirage',
+      modelVersion: '1.0',
+      confidence: 0.9,
+      inputWidth: 64,
+      inputHeight: 64,
+      processingDurationMs: 25,
+      sourceCapability: 'scene',
+      validationStatus: ValidationStatus.verified,
+    ),
+  );
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  sqfliteFfiInit();
+
+  test('SQLite v4 recorded_scenes CRUD and deleteAllUserData wipe work offline', () async {
+    final db = await OpenetraDatabase.open(
+      factory: databaseFactoryFfi,
+      dbPath: inMemoryDatabasePath,
+    );
+    final tables = await db.listTableNames();
+    expect(tables, contains('recorded_scenes'));
+
+    final now = DateTime(2026, 11, 23, 18, 0, 0);
+    final rec = RecordedSceneRecord(
+      id: 'scene-1',
+      title: 'Living Room',
+      environment: 'living room',
+      lighting: 'well lit',
+      items: const [
+        RecordedSceneItem(name: 'chair', zone: 'ahead', confidence: 0.9),
+        RecordedSceneItem(name: 'table', zone: 'left', confidence: 0.85),
+      ],
+      readableTexts: const ['Welcome'],
+      recognizedRegisteredObjects: const [
+        RecognizedRegisteredMatch(
+          objectId: 'obj-1',
+          objectName: 'wallet',
+          zone: 'left',
+          certainty: 0.92,
+          matchedByEmbedding: true,
+        ),
+      ],
+      customNote: 'Spare keys are in the top drawer.',
+      frameCount: 4,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    await db.upsertRecordedScene(rec);
+    var loaded = await db.listRecordedScenes();
+    expect(loaded.length, 1);
+    expect(loaded.first.title, 'Living Room');
+    expect(loaded.first.recognizedRegisteredObjects.first.objectName, 'wallet');
+    expect(loaded.first.customNote, 'Spare keys are in the top drawer.');
+
+    await db.updateRecordedSceneNote(
+      'scene-1',
+      title: 'Front Hall',
+      customNote: 'Wallet is on the side table.',
+    );
+    loaded = await db.listRecordedScenes();
+    expect(loaded.first.title, 'Front Hall');
+    expect(loaded.first.customNote, 'Wallet is on the side table.');
+
+    await db.deleteAllUserData();
+    loaded = await db.listRecordedScenes();
+    expect(loaded, isEmpty);
+
+    await db.close();
+  });
+
+  test('RecordedSceneAggregator fuses multi-frame observations and speaks breakdown + custom note in English, Hindi, Kannada, and Tamil', () {
+    const aggregator = RecordedSceneAggregator();
+    final obs1 = _sampleObservation(
+      id: 'o1',
+      setting: 'office',
+      objects: const [
+        ObjectDetection(
+          entityId: 1,
+          name: 'desk',
+          confidence: 0.90,
+          boundingBox: BoundingBox(x1: 350, y1: 450, x2: 650, y2: 750),
+        ),
+        ObjectDetection(
+          entityId: 2,
+          name: 'chair',
+          confidence: 0.78,
+          boundingBox: BoundingBox(x1: 50, y1: 400, x2: 260, y2: 800),
+        ),
+      ],
+      textSpans: const [
+        PerceivedTextSpan(
+          text: 'Quiet Zone',
+          confidence: 0.88,
+          boundingBox: BoundingBox(x1: 400, y1: 150, x2: 600, y2: 240),
+        ),
+      ],
+    );
+    final obs2 = _sampleObservation(
+      id: 'o2',
+      setting: 'office',
+      objects: const [
+        ObjectDetection(
+          entityId: 3,
+          name: 'desk',
+          confidence: 0.95,
+          boundingBox: BoundingBox(x1: 350, y1: 450, x2: 650, y2: 750),
+        ),
+        ObjectDetection(
+          entityId: 4,
+          name: 'door',
+          confidence: 0.84,
+          boundingBox: BoundingBox(x1: 760, y1: 200, x2: 960, y2: 900),
+        ),
+      ],
+    );
+
+    final record = aggregator.aggregate(
+      id: 'agg-1',
+      title: 'My Office',
+      observations: [obs1, obs2],
+      registeredMatches: const [
+        RecognizedRegisteredMatch(
+          objectId: 'reg-1',
+          objectName: 'my bottle',
+          zone: 'ahead',
+          certainty: 0.91,
+          matchedByEmbedding: true,
+        ),
+      ],
+      customNote: 'Charger is behind the desk.',
+    );
+
+    expect(record.frameCount, 2);
+    expect(record.environment, 'office');
+    // Deduplicated desk keeping highest confidence 0.95
+    expect(record.items.where((i) => i.name == 'desk').length, 1);
+    expect(record.items.firstWhere((i) => i.name == 'desk').confidence, 0.95);
+
+    final en = record.buildSpokenBreakdown('en-IN');
+    expect(en, contains('My Office'));
+    expect(en, contains('my bottle'));
+    expect(en, contains('Charger is behind the desk.'));
+
+    final hi = record.buildSpokenBreakdown('hi-IN');
+    expect(hi, contains('कार्यालय'));
+    expect(hi, contains('my bottle'));
+    expect(hi, contains('आपका सहेजा गया नोट'));
+    expect(hi, contains('Charger is behind the desk.'));
+
+    final kn = record.buildSpokenBreakdown('kn-IN');
+    expect(kn, contains('ಕಚೇರಿ'));
+    expect(kn, contains('my bottle'));
+    expect(kn, contains('ಟಿಪ್ಪಣಿ'));
+
+    final ta = record.buildSpokenBreakdown('ta-IN');
+    expect(ta, contains('அலுவலகம்'));
+    expect(ta, contains('my bottle'));
+    expect(ta, contains('குறிப்பு'));
+  });
+
+  test('RegisteredObjectSceneMatcher verifies visual embeddings (>=0.80) and high-confidence labels (>=0.72), rejecting low-certainty false positives', () async {
+    final db = await OpenetraDatabase.open(
+      factory: databaseFactoryFfi,
+      dbPath: inMemoryDatabasePath,
+    );
+    final now = DateTime(2026, 11, 23, 18, 0, 0);
+
+    // Profile 1: with saved 4-dim normalized embedding
+    await db.upsertPersonalObject(
+      PersonalObjectProfile(
+        id: 'p-wallet',
+        name: 'wallet',
+        category: 'personal',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    await db.saveObjectEmbedding(
+      id: 'emb-1',
+      objectId: 'p-wallet',
+      modelId: 'stub-embed',
+      vector: Float32List.fromList([1.0, 0.0, 0.0, 0.0]),
+    );
+
+    // Profile 2: label-only profile
+    await db.upsertPersonalObject(
+      PersonalObjectProfile(
+        id: 'p-keys',
+        name: 'keys',
+        category: 'personal',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    const matcher = RegisteredObjectSceneMatcher();
+    final obs = _sampleObservation(
+      id: 'obs-match',
+      setting: 'bedroom',
+      objects: const [
+        ObjectDetection(
+          entityId: 1,
+          name: 'pouch',
+          confidence: 0.65,
+          boundingBox: BoundingBox(x1: 400, y1: 400, x2: 600, y2: 600),
+        ),
+        ObjectDetection(
+          entityId: 2,
+          name: 'keys',
+          confidence: 0.82,
+          boundingBox: BoundingBox(x1: 750, y1: 450, x2: 920, y2: 620),
+        ),
+      ],
+    );
+
+    // Matching visual vector -> matches both wallet (embedding) and keys (label >= 0.72)
+    final matches = await matcher.matchInObservation(
+      observation: obs,
+      database: db,
+      frame: _sampleFrame('f1'),
+      embeddingProvider: _StubEmbeddingProvider([0.98, 0.1, 0.0, 0.0]),
+    );
+    expect(matches.map((m) => m.objectName), containsAll(['wallet', 'keys']));
+    expect(
+      matches.firstWhere((m) => m.objectName == 'wallet').matchedByEmbedding,
+      isTrue,
+    );
+
+    // Verify last_seen_records updated
+    final profiles = await db.listPersonalObjects();
+    expect(
+      profiles.firstWhere((p) => p.id == 'p-wallet').lastSeenSetting,
+      'bedroom',
+    );
+
+    // Orthogonal visual vector & low-confidence label -> 0 matches
+    final lowObs = _sampleObservation(
+      id: 'obs-low',
+      setting: 'bedroom',
+      objects: const [
+        ObjectDetection(
+          entityId: 3,
+          name: 'pouch',
+          confidence: 0.65,
+          boundingBox: BoundingBox(x1: 400, y1: 400, x2: 600, y2: 600),
+        ),
+        ObjectDetection(
+          entityId: 4,
+          name: 'keys',
+          confidence: 0.50,
+          boundingBox: BoundingBox(x1: 750, y1: 450, x2: 920, y2: 620),
+        ),
+      ],
+    );
+    final noMatches = await matcher.matchInObservation(
+      observation: lowObs,
+      database: db,
+      frame: _sampleFrame('f2'),
+      embeddingProvider: _StubEmbeddingProvider([0.0, 1.0, 0.0, 0.0]),
+    );
+    expect(noMatches, isEmpty);
+
+    await db.close();
+  });
+
+  test('OpenetraCoordinator calls out registered items in live/continuous scenes and records multi-frame scene memories', () async {
+    final db = await OpenetraDatabase.open(
+      factory: databaseFactoryFfi,
+      dbPath: inMemoryDatabasePath,
+    );
+    final now = DateTime(2026, 11, 23, 18, 0, 0);
+    await db.upsertPersonalObject(
+      PersonalObjectProfile(
+        id: 'reg-keys',
+        name: 'keys',
+        category: 'personal',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    final stubVision = _StubVisionProvider([
+      _sampleObservation(
+        id: 'v1',
+        setting: 'kitchen',
+        objects: const [
+          ObjectDetection(
+            entityId: 1,
+            name: 'table',
+            confidence: 0.88,
+            boundingBox: BoundingBox(x1: 350, y1: 450, x2: 650, y2: 750),
+          ),
+          ObjectDetection(
+            entityId: 2,
+            name: 'keys',
+            confidence: 0.85,
+            boundingBox: BoundingBox(x1: 50, y1: 450, x2: 240, y2: 600),
+          ),
+        ],
+      ),
+    ]);
+
+    final deps = await OpenetraDependencies.bootstrap(
+      database: db,
+      visionProvider: stubVision,
+      enablePlatformTts: false,
+    );
+
+    // Live / continuous scene description calls out registered 'keys' in English
+    await deps.coordinator.runDescribeSurroundings(
+      overrideFrame: _sampleFrame('live-1'),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    final spokenEn = deps.voiceAssistantBloc.state.lastResponse?.spokenText ?? '';
+    expect(spokenEn, contains('Your registered keys'));
+
+    // Switch language to Hindi -> registered item callout is spoken in Hindi
+    deps.settingsBloc.add(const UpdatePreferredLanguage('hi-IN'));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await deps.coordinator.runDescribeSurroundings(
+      overrideFrame: _sampleFrame('live-2'),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    final spokenHi = deps.voiceAssistantBloc.state.lastResponse?.spokenText ?? '';
+    expect(spokenHi, contains('आपकी सहेजी गई वस्तु keys'));
+
+    // Record multi-frame scene clip and verify persistence + Hindi spoken breakdown
+    final saved = await deps.coordinator.recordAndSaveSceneClip(
+      title: 'रसोई',
+      customNote: 'चाबी बाईं तरफ है',
+      overrideFrames: [_sampleFrame('r1'), _sampleFrame('r2')],
+    );
+    expect(saved.frameCount, 2);
+    expect(saved.recognizedRegisteredObjects.first.objectName, 'keys');
+    final allSaved = await deps.coordinator.listRecordedScenes();
+    expect(allSaved.length, 1);
+
+    final spokenRec = deps.voiceAssistantBloc.state.lastResponse?.spokenText ?? '';
+    expect(spokenRec, contains('चाबी बाईं तरफ है'));
+
+    await db.close();
+  });
+
+  testWidgets('SceneMemoryScreen displays saved scenes and lets user modify spoken note', (tester) async {
+    late OpenetraDatabase db;
+    late OpenetraDependencies deps;
+    await tester.runAsync(() async {
+      db = await OpenetraDatabase.open(
+        factory: databaseFactoryFfi,
+        dbPath: inMemoryDatabasePath,
+      );
+      deps = await OpenetraDependencies.bootstrap(
+        database: db,
+        enablePlatformTts: false,
+      );
+      final now = DateTime(2026, 11, 23, 18, 0, 0);
+      await db.upsertRecordedScene(
+        RecordedSceneRecord(
+          id: 'ui-scene-1',
+          title: 'Study Desk',
+          environment: 'office',
+          items: const [
+            RecordedSceneItem(name: 'laptop', zone: 'ahead', confidence: 0.91),
+          ],
+          readableTexts: const [],
+          recognizedRegisteredObjects: const [],
+          customNote: 'Original note',
+          frameCount: 4,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SceneMemoryScreen(coordinator: deps.coordinator),
+      ),
+    );
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Study Desk'), findsOneWidget);
+    expect(find.text('Note: Original note'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Modify Note'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Modify Note'));
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.last, 'Keys near window');
+    await tester.tap(find.text('Save & Speak'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Note: Keys near window'), findsOneWidget);
+
+    await tester.runAsync(() => db.close());
+  });
+}

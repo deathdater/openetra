@@ -327,6 +327,36 @@ class _DialGlyphPainter extends CustomPainter {
             strokeSecondary,
           );
         }
+
+      case DialGlyphKind.recordScene:
+        // Rounded cinema frame + warm orange record dot + soft lavender horizon wave
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(center: c, width: r * 1.65, height: r * 1.18),
+            const Radius.circular(8),
+          ),
+          strokePrimary,
+        );
+        canvas.drawCircle(
+          Offset(c.dx + r * 0.44, c.dy - r * 0.24),
+          4.2,
+          fillAccent,
+        );
+        final wave = Path()
+          ..moveTo(c.dx - r * 0.52, c.dy + r * 0.22)
+          ..quadraticBezierTo(
+            c.dx - r * 0.14,
+            c.dy - r * 0.14,
+            c.dx + r * 0.14,
+            c.dy + r * 0.14,
+          )
+          ..quadraticBezierTo(
+            c.dx + r * 0.34,
+            c.dy + r * 0.30,
+            c.dx + r * 0.52,
+            c.dy + r * 0.08,
+          );
+        canvas.drawPath(wave, strokeSecondary);
     }
   }
 

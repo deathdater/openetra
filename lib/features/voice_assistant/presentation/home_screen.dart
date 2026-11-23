@@ -9,6 +9,7 @@ import '../../emergency/presentation/emergency_assistance_screen.dart';
 import '../../flashlight/presentation/flashlight_settings_screen.dart';
 import '../../model_manager/presentation/model_manager_screen.dart';
 import '../../object_memory/presentation/object_memory_screen.dart';
+import '../../scene_understanding/presentation/scene_memory_screen.dart';
 import '../../settings/bloc/settings_bloc.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../../shopping/presentation/shopping_screen.dart';
@@ -140,6 +141,24 @@ class _HomeScreenState extends State<HomeScreen> {
                               onPressed: isBusy
                                   ? null
                                   : () => widget.coordinator.runDescribeSurroundings(),
+                            ),
+                            const SizedBox(height: 12),
+                            AccessibleActionTile(
+                              title: 'Record & Saved Scenes',
+                              subtitle:
+                                  'Record a scene clip, store its breakdown offline & edit spoken notes',
+                              semanticHint:
+                                  'Double tap to record or replay saved scene descriptions',
+                              icon: Icons.videocam_outlined,
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => SceneMemoryScreen(
+                                      coordinator: widget.coordinator,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                             const SizedBox(height: 12),
                             AccessibleActionTile(

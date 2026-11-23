@@ -27,6 +27,7 @@ enum DialScreenRoute {
   settings,
   emergencyAssistance,
   objectMemory,
+  sceneMemory,
   shoppingAssistant,
   flashlightSettings,
   gestureAutomation,
@@ -51,6 +52,7 @@ enum DialOptionKind {
 enum DialGlyphKind {
   eyeIris,
   continuousScene,
+  recordScene,
   scriptLines,
   objectReticle,
   hazardWave,
@@ -257,6 +259,15 @@ class OpenetraDialMenuTree {
             icon: Icons.autorenew_rounded,
             glyph: DialGlyphKind.continuousScene,
             kind: DialOptionKind.toggleContinuousScene,
+          ),
+          DialOption(
+            id: 'describe_record_memory',
+            title: 'Record & Saved Scenes',
+            spokenDescription: 'Record a scene clip, store its complete breakdown offline, edit spoken notes, or replay saved scenes.',
+            icon: Icons.videocam_outlined,
+            glyph: DialGlyphKind.recordScene,
+            kind: DialOptionKind.screenRoute,
+            screenRoute: DialScreenRoute.sceneMemory,
           ),
           DialOption(
             id: 'describe_repeat',

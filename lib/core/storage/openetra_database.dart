@@ -6,6 +6,7 @@ import '../assistive/assistive_action_router.dart';
 import '../assistive/custom_gesture_record.dart';
 import '../domain/entities/entities.dart';
 import '../errors/openetra_failure.dart';
+import '../../features/scene_understanding/domain/recorded_scene_memory.dart';
 import '../../features/shopping/domain/shopping_assistant_service.dart';
 
 /// User preferences snapshot stored offline in SQLite.
@@ -55,7 +56,7 @@ class OpenetraDatabase {
   OpenetraDatabase._(this._db);
 
   final Database _db;
-  static const int schemaVersion = 3;
+  static const int schemaVersion = 4;
 
   /// Opens or creates the local database. Pass [factory] (e.g. sqflite_common_ffi)
   /// and [dbPath] (`inMemoryDatabasePath`) for deterministic host unit tests.
@@ -79,6 +80,7 @@ class OpenetraDatabase {
             await _createLocalProductsTable(database);
             await _seedInitialProducts(database);
             await _createAssistiveTables(database);
+            await _createRecordedScenesTable(database);
           },
           onUpgrade: (database, oldVersion, newVersion) async {
             if (oldVersion < 2) {
@@ -87,6 +89,9 @@ class OpenetraDatabase {
             }
             if (oldVersion < 3) {
               await _createAssistiveTables(database);
+            }
+            if (oldVersion < 4) {
+              await _createRecordedScenesTable(database);
             }
           },
         ),
@@ -789,6 +794,74 @@ class OpenetraDatabase {
     await _db.delete('custom_gestures');
   }
 
+  static Future<void> _createRecordedScenesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS recorded_scenes (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        environment TEXT NOT NULL,
+        summary_json TEXT NOT NULL,
+        custom_note TEXT,
+        frame_count INTEGER NOT NULL,
+        recognized_objects_json TEXT NOT NULL,
+        created_at_ms INTEGER NOT NULL,
+        updated_at_ms INTEGER NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> upsertRecordedScene(RecordedSceneRecord record) async {
+    await _db.insert(
+      'recorded_scenes',
+      {
+        'id': record.id,
+        'title': record.title,
+        'environment': record.environment,
+        'summary_json': record.encodeSummaryJson(),
+        'custom_note': record.customNote,
+        'frame_count': record.frameCount,
+        'recognized_objects_json': record.encodeRegisteredMatchesJson(),
+        'created_at_ms': record.createdAt.millisecondsSinceEpoch,
+        'updated_at_ms': record.updatedAt.millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<RecordedSceneRecord>> listRecordedScenes() async {
+    final rows = await _db.query(
+      'recorded_scenes',
+      orderBy: 'updated_at_ms DESC',
+    );
+    return rows.map(RecordedSceneRecord.fromDbRow).toList();
+  }
+
+  Future<void> updateRecordedSceneNote(
+    String id, {
+    String? title,
+    String? customNote,
+  }) async {
+    final values = <String, Object?>{
+      'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+    };
+    if (title != null && title.trim().isNotEmpty) {
+      values['title'] = title.trim();
+    }
+    if (customNote != null) {
+      values['custom_note'] = customNote.trim();
+    }
+    await _db.update(
+      'recorded_scenes',
+      values,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> deleteRecordedScene(String id) async {
+    await _db.delete('recorded_scenes', where: 'id = ?', whereArgs: [id]);
+  }
+
   /// User-controlled atomic deletion of personal data, history, scanned docs, and safety logs.
   Future<void> deleteAllUserData() async {
     await _db.transaction((txn) async {
@@ -800,6 +873,7 @@ class OpenetraDatabase {
       await txn.delete('safety_events');
       await txn.delete('assistive_preferences');
       await txn.delete('custom_gestures');
+      await txn.delete('recorded_scenes');
       await txn.delete(
         'local_products',
         where: 'source != ?',
