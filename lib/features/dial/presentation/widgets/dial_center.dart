@@ -21,20 +21,23 @@ class DialCenter extends StatefulWidget {
   final bool reducedMotion;
   final double size;
 
-  static Color ringColorForPhase(DialLifecyclePhase phase) {
+  static Color ringColorForPhase(
+    DialLifecyclePhase phase, [
+    OpenetraPalette palette = OpenetraPalette.dark,
+  ]) {
     switch (phase) {
       case DialLifecyclePhase.confirmingAction:
       case DialLifecyclePhase.exitArmed:
-        return OpenetraTheme.hazardWarning;
+        return palette.warning;
       case DialLifecyclePhase.executing:
       case DialLifecyclePhase.listening:
       case DialLifecyclePhase.processing:
       case DialLifecyclePhase.speaking:
-        return OpenetraTheme.accent;
+        return palette.secondary;
       case DialLifecyclePhase.completed:
-        return OpenetraTheme.okGreen;
+        return palette.success;
       case DialLifecyclePhase.failed:
-        return OpenetraTheme.hazardCritical;
+        return palette.error;
       case DialLifecyclePhase.initializing:
       case DialLifecyclePhase.ready:
       case DialLifecyclePhase.rootMenu:
@@ -42,7 +45,7 @@ class DialCenter extends StatefulWidget {
       case DialLifecyclePhase.paused:
       case DialLifecyclePhase.cancelling:
       case DialLifecyclePhase.exiting:
-        return OpenetraTheme.accentLavender;
+        return palette.primary;
     }
   }
 
@@ -110,7 +113,8 @@ class _DialCenterState extends State<DialCenter>
 
   @override
   Widget build(BuildContext context) {
-    final ringColor = DialCenter.ringColorForPhase(widget.phase);
+    final palette = OpenetraTheme.paletteOf(context);
+    final ringColor = DialCenter.ringColorForPhase(widget.phase, palette);
     return RepaintBoundary(
       child: AnimatedBuilder(
         animation: _controller,
@@ -121,6 +125,7 @@ class _DialCenterState extends State<DialCenter>
             height: widget.size,
             child: CustomPaint(
               painter: _OpenetraBrandDialPainter(
+                palette: palette,
                 ringColor: ringColor,
                 pulse: pulse,
                 isActiveWave: widget.phase == DialLifecyclePhase.listening ||
@@ -129,10 +134,12 @@ class _DialCenterState extends State<DialCenter>
               ),
               child: Center(
                 child: AnimatedSwitcher(
-                  duration: widget.reducedMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 220),
-                  switchInCurve: Curves.easeOutCubic,
+                  duration: OpenetraMotion.resolve(
+                    context,
+                    OpenetraMotion.normal,
+                    reducedMotion: widget.reducedMotion,
+                  ),
+                  switchInCurve: OpenetraMotion.standardCurve,
                   child: DialFocusGlyph(
                     key: ValueKey(widget.glyph),
                     glyph: widget.glyph,
@@ -150,11 +157,13 @@ class _DialCenterState extends State<DialCenter>
 
 class _OpenetraBrandDialPainter extends CustomPainter {
   const _OpenetraBrandDialPainter({
+    required this.palette,
     required this.ringColor,
     required this.pulse,
     required this.isActiveWave,
   });
 
+  final OpenetraPalette palette;
   final Color ringColor;
   final double pulse;
   final bool isActiveWave;
@@ -174,21 +183,21 @@ class _OpenetraBrandDialPainter extends CustomPainter {
       ).createShader(Rect.fromCircle(center: center, radius: radius));
     canvas.drawCircle(center, radius * (0.96 + pulse * 0.04), haloPaint);
 
-    // Dark Plum layered instrument disc with subtle radial highlight
+    // Layered instrument disc adapting to Dark Aubergine & Warm White Light
     final corePaint = Paint()
-      ..shader = const RadialGradient(
-        center: Alignment(-0.25, -0.30),
+      ..shader = RadialGradient(
+        center: const Alignment(-0.25, -0.30),
         radius: 1.0,
         colors: [
-          OpenetraTheme.surfaceElevated,
-          OpenetraTheme.surface,
+          palette.surfaceElevated,
+          palette.surface,
         ],
       ).createShader(Rect.fromCircle(center: center, radius: radius * 0.78));
     canvas.drawCircle(center, radius * 0.78, corePaint);
 
     // Inner hairline precision bevel
     final innerBevel = Paint()
-      ..color = OpenetraTheme.border.withOpacity(0.55)
+      ..color = palette.border.withOpacity(0.55)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
     canvas.drawCircle(center, radius * 0.67, innerBevel);
@@ -209,14 +218,14 @@ class _OpenetraBrandDialPainter extends CustomPainter {
       center.dy + math.sin(dotAngle) * radius * 0.78,
     );
     final dotPaint = Paint()
-      ..color = OpenetraTheme.accent
+      ..color = palette.secondary
       ..style = PaintingStyle.fill;
     canvas.drawCircle(dotPos, 5.2 + pulse * 1.5, dotPaint);
 
     // Subtle waveform crest inside lower disc during active voice/processing
     if (isActiveWave) {
       final wavePaint = Paint()
-        ..color = OpenetraTheme.accentLavender.withOpacity(0.80)
+        ..color = palette.primary.withOpacity(0.80)
         ..strokeWidth = 2.4
         ..strokeCap = StrokeCap.round;
       for (var i = -2; i <= 2; i++) {
@@ -234,7 +243,8 @@ class _OpenetraBrandDialPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _OpenetraBrandDialPainter oldDelegate) {
-    return oldDelegate.ringColor != ringColor ||
+    return oldDelegate.palette != palette ||
+        oldDelegate.ringColor != ringColor ||
         oldDelegate.pulse != pulse ||
         oldDelegate.isActiveWave != isActiveWave;
   }

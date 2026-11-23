@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 
-/// Minimum 64dp+ touch target button with explicit TalkBack Semantics.
+/// Minimum 64dp+ touch target button with explicit TalkBack Semantics and
+/// full Dark / Warm-White Light semantic theme adaptation.
 class AccessibleActionTile extends StatelessWidget {
   const AccessibleActionTile({
     super.key,
@@ -26,44 +27,52 @@ class AccessibleActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = OpenetraTheme.paletteOf(context);
+    final textTheme = Theme.of(context).textTheme;
+    final enabled = onPressed != null;
+
     final bg = filledAccent
-        ? OpenetraTheme.accent
-        : OpenetraTheme.surfaceElevated;
+        ? (enabled ? palette.secondary : palette.disabled)
+        : palette.surfaceElevated;
     final fg = filledAccent
-        ? OpenetraTheme.accentText
-        : OpenetraTheme.primaryText;
+        ? palette.onAccent
+        : (enabled ? palette.textPrimary : palette.disabled);
     final subFg = filledAccent
-        ? OpenetraTheme.accentText.withOpacity(0.85)
-        : OpenetraTheme.secondaryText;
+        ? palette.onAccent.withOpacity(0.88)
+        : (enabled ? palette.textSecondary : palette.disabled);
+    final borderColor = accentBorderColor ??
+        (filledAccent ? palette.secondary : palette.border);
 
     return Semantics(
       button: true,
-      enabled: onPressed != null,
+      enabled: enabled,
       label: title,
       hint: semanticHint,
       child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: minHeight, minWidth: double.infinity),
+        constraints: BoxConstraints(
+          minHeight: minHeight,
+          minWidth: double.infinity,
+        ),
         child: Material(
           color: bg,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(
-              color: accentBorderColor ??
-                  (filledAccent ? OpenetraTheme.accent : OpenetraTheme.border),
-              width: 2,
-            ),
+            borderRadius: BorderRadius.circular(OpenetraSpacing.radiusMd),
+            side: BorderSide(color: borderColor, width: 2),
           ),
           child: InkWell(
             onTap: onPressed,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(OpenetraSpacing.radiusMd),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 14,
+              ),
               child: Row(
                 children: [
                   ExcludeSemantics(
-                    child: Icon(icon, size: 32, color: fg),
+                    child: Icon(icon, size: 30, color: fg),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: OpenetraSpacing.lg),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,19 +80,22 @@ class AccessibleActionTile extends StatelessWidget {
                       children: [
                         Text(
                           title,
-                          style: TextStyle(
-                            fontSize: 19,
+                          style: (textTheme.titleMedium ??
+                                  const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                  ))
+                              .copyWith(
                             fontWeight: FontWeight.w700,
                             color: fg,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: OpenetraSpacing.xs),
                         Text(
                           subtitle,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: subFg,
-                          ),
+                          style: (textTheme.bodyMedium ??
+                                  const TextStyle(fontSize: 14))
+                              .copyWith(color: subFg),
                         ),
                       ],
                     ),
@@ -98,7 +110,8 @@ class AccessibleActionTile extends StatelessWidget {
   }
 }
 
-/// Live-region spoken status banner so TalkBack announces updates immediately.
+/// Live-region spoken status banner so TalkBack announces updates immediately
+/// and low-vision users see clear, calm semantic state borders.
 class SpokenStatusBanner extends StatelessWidget {
   const SpokenStatusBanner({
     super.key,
@@ -113,19 +126,25 @@ class SpokenStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = OpenetraTheme.paletteOf(context);
+    final textTheme = Theme.of(context).textTheme;
     final borderColor = isDegraded
-        ? OpenetraTheme.hazardWarning
-        : (isBusy ? OpenetraTheme.accent : OpenetraTheme.okGreen);
+        ? palette.warning
+        : (isBusy ? palette.secondary : palette.success);
 
     return Semantics(
       liveRegion: true,
-      label: isDegraded ? 'Degraded notice: $statusText' : 'Assistant update: $statusText',
-      child: Container(
+      label: isDegraded
+          ? 'Degraded notice: $statusText'
+          : 'Assistant update: $statusText',
+      child: AnimatedContainer(
+        duration: OpenetraMotion.resolve(context, OpenetraMotion.fast),
+        curve: OpenetraMotion.standardCurve,
         width: double.infinity,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(OpenetraSpacing.lg),
         decoration: BoxDecoration(
-          color: OpenetraTheme.surface,
-          borderRadius: BorderRadius.circular(14),
+          color: palette.surface,
+          borderRadius: BorderRadius.circular(OpenetraSpacing.radiusMd),
           border: Border.all(color: borderColor, width: 2),
         ),
         child: Column(
@@ -137,29 +156,34 @@ class SpokenStatusBanner extends StatelessWidget {
                   child: Icon(
                     isDegraded
                         ? Icons.warning_amber_rounded
-                        : (isBusy ? Icons.hourglass_top : Icons.record_voice_over),
+                        : (isBusy
+                            ? Icons.hourglass_top
+                            : Icons.record_voice_over),
                     color: borderColor,
-                    size: 22,
+                    size: 20,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  isDegraded
-                      ? 'DEGRADED CAPABILITY NOTICE'
-                      : (isBusy ? 'PROCESSING LOCALLY' : 'SPOKEN OUTPUT'),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                    color: borderColor,
+                const SizedBox(width: OpenetraSpacing.sm),
+                Expanded(
+                  child: Text(
+                    isDegraded
+                        ? 'DEGRADED CAPABILITY NOTICE'
+                        : (isBusy ? 'PROCESSING LOCALLY' : 'SPOKEN OUTPUT'),
+                    style: (textTheme.labelMedium ??
+                            const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                            ))
+                        .copyWith(color: borderColor),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: OpenetraSpacing.sm),
             Text(
               statusText,
-              style: Theme.of(context).textTheme.bodyLarge,
+              style: textTheme.bodyLarge,
             ),
           ],
         ),

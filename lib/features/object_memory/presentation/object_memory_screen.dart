@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../app/theme.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../../shared/widgets/openetra_components.dart';
 import '../bloc/object_memory_bloc.dart';
 
 class ObjectMemoryScreen extends StatefulWidget {
@@ -33,8 +34,9 @@ class _ObjectMemoryScreenState extends State<ObjectMemoryScreen> {
       appBar: AppBar(title: const Text('Personal Object Memory')),
       body: BlocBuilder<ObjectMemoryBloc, ObjectMemoryState>(
         builder: (context, state) {
+          final palette = OpenetraTheme.paletteOf(context);
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(OpenetraSpacing.lg),
             children: [
               if (state.lastSearchResult != null) ...[
                 SpokenStatusBanner(
@@ -42,23 +44,13 @@ class _ObjectMemoryScreenState extends State<ObjectMemoryScreen> {
                   isDegraded: false,
                   isBusy: state.isSearching,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: OpenetraSpacing.lg),
               ],
-              TextField(
+              OpenetraTextField(
                 controller: _nameController,
-                style: const TextStyle(color: OpenetraTheme.primaryText, fontSize: 18),
-                decoration: const InputDecoration(
-                  labelText: 'Personal item name (e.g., wallet, keys, bottle)',
-                  labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: OpenetraTheme.border, width: 1.5),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: OpenetraTheme.accent, width: 2),
-                  ),
-                ),
+                labelText: 'Personal item name (e.g., wallet, keys, bottle)',
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: OpenetraSpacing.md),
               AccessibleActionTile(
                 title: 'Save Item Profile Locally',
                 subtitle: 'Stores item label offline in SQLite for fast search',
@@ -101,8 +93,11 @@ class _ObjectMemoryScreenState extends State<ObjectMemoryScreen> {
               ),
               const SizedBox(height: 12),
               if (state.profiles.isEmpty)
-                const Text(
-                  'No personal objects saved yet. Add items like wallet, keys, or water bottle above.',
+                const OpenetraEmptyState(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'No personal objects saved yet',
+                  message:
+                      'Add items like wallet, keys, or water bottle above to recognize them in live scenes.',
                 )
               else
                 ...state.profiles.map((p) {
@@ -133,13 +128,13 @@ class _ObjectMemoryScreenState extends State<ObjectMemoryScreen> {
                               onPressed: () => context
                                   .read<ObjectMemoryBloc>()
                                   .add(RemovePersonalObject(p.id)),
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.delete_outline,
-                                color: OpenetraTheme.hazardCritical,
+                                color: palette.error,
                               ),
-                              label: const Text(
+                              label: Text(
                                 'Remove',
-                                style: TextStyle(color: OpenetraTheme.hazardCritical),
+                                style: TextStyle(color: palette.error),
                               ),
                             ),
                           ),

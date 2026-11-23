@@ -10,28 +10,29 @@ class DialFocusGlyph extends StatelessWidget {
     super.key,
     required this.glyph,
     this.size = 54,
-    this.primaryColor = OpenetraTheme.primaryText,
-    this.accentColor = OpenetraTheme.accent,
-    this.secondaryColor = OpenetraTheme.accentLavender,
+    this.primaryColor,
+    this.accentColor,
+    this.secondaryColor,
   });
 
   final DialGlyphKind glyph;
   final double size;
-  final Color primaryColor;
-  final Color accentColor;
-  final Color secondaryColor;
+  final Color? primaryColor;
+  final Color? accentColor;
+  final Color? secondaryColor;
 
   @override
   Widget build(BuildContext context) {
+    final palette = OpenetraTheme.paletteOf(context);
     return SizedBox(
       width: size,
       height: size,
       child: CustomPaint(
         painter: _DialGlyphPainter(
           glyph: glyph,
-          primary: primaryColor,
-          accent: accentColor,
-          secondary: secondaryColor,
+          primary: primaryColor ?? palette.textPrimary,
+          accent: accentColor ?? palette.secondary,
+          secondary: secondaryColor ?? palette.primary,
         ),
       ),
     );

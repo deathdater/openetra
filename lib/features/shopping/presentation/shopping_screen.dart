@@ -3,6 +3,7 @@ import '../../../app/openetra_coordinator.dart';
 import '../../../app/theme.dart';
 import '../../../core/storage/openetra_database.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../../shared/widgets/openetra_components.dart';
 import '../domain/shopping_assistant_service.dart';
 
 class ShoppingScreen extends StatefulWidget {
@@ -83,40 +84,19 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          TextField(
+          OpenetraTextField(
             controller: _barcodeController,
-            style: const TextStyle(color: OpenetraTheme.primaryText),
-            decoration: const InputDecoration(
-              labelText: 'Barcode digits (e.g., 8901058851234)',
-              labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: OpenetraTheme.border),
-              ),
-            ),
+            labelText: 'Barcode digits (e.g., 8901058851234)',
           ),
-          const SizedBox(height: 10),
-          TextField(
+          const SizedBox(height: OpenetraSpacing.sm + 2),
+          OpenetraTextField(
             controller: _nameController,
-            style: const TextStyle(color: OpenetraTheme.primaryText),
-            decoration: const InputDecoration(
-              labelText: 'Product name',
-              labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: OpenetraTheme.border),
-              ),
-            ),
+            labelText: 'Product name',
           ),
-          const SizedBox(height: 10),
-          TextField(
+          const SizedBox(height: OpenetraSpacing.sm + 2),
+          OpenetraTextField(
             controller: _brandController,
-            style: const TextStyle(color: OpenetraTheme.primaryText),
-            decoration: const InputDecoration(
-              labelText: 'Brand (optional)',
-              labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: OpenetraTheme.border),
-              ),
-            ),
+            labelText: 'Brand (optional)',
           ),
           const SizedBox(height: 12),
           AccessibleActionTile(
@@ -158,28 +138,19 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
           ..._catalog.map((p) {
             final brand = p.brand != null ? '${p.brand} ' : '';
             final qty = p.netQuantity != null ? ' (${p.netQuantity})' : '';
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: OpenetraTheme.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: OpenetraTheme.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$brand${p.productName}$qty',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    Text(
-                      'Barcode: ${p.barcode}',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
+            return OpenetraCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$brand${p.productName}$qty',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  Text(
+                    'Barcode: ${p.barcode}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
               ),
             );
           }),

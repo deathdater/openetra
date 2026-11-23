@@ -3,6 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/audio/bloc/audio_bloc.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../../shared/widgets/openetra_components.dart';
+import '../../dial/models/dial_menu_node.dart';
+import '../../dial/presentation/widgets/dial_focus_glyph.dart';
 import '../../settings/bloc/settings_bloc.dart';
 
 class OnboardingScreen extends StatelessWidget {
@@ -23,12 +26,42 @@ class OnboardingScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            Semantics(
-              header: true,
-              child: Text(
-                'Offline AI Visual Companion',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
+            Row(
+              children: [
+                const ExcludeSemantics(
+                  child: DialFocusGlyph(
+                    glyph: DialGlyphKind.eyeIris,
+                    size: 46,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      'Offline AI Visual Companion',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                OpenetraStatusBadge(
+                  label: '100% Offline Processing',
+                  icon: Icons.offline_pin_outlined,
+                  tone: OpenetraBadgeTone.success,
+                ),
+                OpenetraStatusBadge(
+                  label: 'Voice-First & TalkBack Ready',
+                  icon: Icons.record_voice_over_outlined,
+                  tone: OpenetraBadgeTone.info,
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             const SpokenStatusBanner(

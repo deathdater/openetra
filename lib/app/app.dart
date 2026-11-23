@@ -528,26 +528,33 @@ class _OpenetraAppState extends State<OpenetraApp> {
         BlocProvider.value(value: widget.deps.floatingCompanionBloc),
         BlocProvider.value(value: widget.deps.dialBloc),
       ],
-      child: MaterialApp(
-        title: 'Openetra',
-        debugShowCheckedModeBanner: false,
-        theme: OpenetraTheme.buildDarkTheme(),
-        home: BlocListener<SettingsBloc, SettingsState>(
-          listener: (context, state) {
-            if (state.isLoaded &&
-                state.preferences.onboardingCompleted &&
-                !_showHome) {
-              setState(() => _showHome = true);
-            }
-          },
-          child: _showHome
-              ? (widget.useClassicHome
-                  ? HomeScreen(coordinator: widget.deps.coordinator)
-                  : AssistiveDialPage(coordinator: widget.deps.coordinator))
-              : OnboardingScreen(
-                  onCompleted: () => setState(() => _showHome = true),
-                ),
-        ),
+      child: BlocBuilder<SettingsBloc, SettingsState>(
+        buildWhen: (prev, curr) => prev.themeMode != curr.themeMode,
+        builder: (context, settingsState) {
+          return MaterialApp(
+            title: 'Openetra',
+            debugShowCheckedModeBanner: false,
+            theme: OpenetraTheme.buildLightTheme(),
+            darkTheme: OpenetraTheme.buildDarkTheme(),
+            themeMode: settingsState.themeMode,
+            home: BlocListener<SettingsBloc, SettingsState>(
+              listener: (context, state) {
+                if (state.isLoaded &&
+                    state.preferences.onboardingCompleted &&
+                    !_showHome) {
+                  setState(() => _showHome = true);
+                }
+              },
+              child: _showHome
+                  ? (widget.useClassicHome
+                      ? HomeScreen(coordinator: widget.deps.coordinator)
+                      : AssistiveDialPage(coordinator: widget.deps.coordinator))
+                  : OnboardingScreen(
+                      onCompleted: () => setState(() => _showHome = true),
+                    ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -5,6 +5,7 @@ import '../../../app/theme.dart';
 import '../../../core/resource_management/bloc/device_resource_bloc.dart';
 import '../../../core/safety/bloc/safety_bloc.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../../shared/widgets/openetra_components.dart';
 import '../../emergency/presentation/emergency_assistance_screen.dart';
 import '../../flashlight/presentation/flashlight_settings_screen.dart';
 import '../../model_manager/presentation/model_manager_screen.dart';
@@ -97,6 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             (voiceState.lastResponse?.isDegraded ?? false) ||
                             resourceState.resourceState.isDegradedCapability;
                         final prefs = context.watch<SettingsBloc>().state.preferences;
+                        final palette = OpenetraTheme.paletteOf(context);
 
                         return ListView(
                           padding: const EdgeInsets.all(16),
@@ -112,11 +114,28 @@ class _HomeScreenState extends State<HomeScreen> {
                                   'Mode ${resourceState.resourceState.operatingMode.name}, '
                                   'Language ${prefs.preferredLanguage}, '
                                   'Battery ${resourceState.resourceState.batteryPercent} percent',
-                              child: Text(
-                                'Mode: ${resourceState.resourceState.operatingMode.name.toUpperCase()}  •  '
-                                'Lang: ${prefs.preferredLanguage}  •  '
-                                'Battery: ${resourceState.resourceState.batteryPercent}%',
-                                style: Theme.of(context).textTheme.bodyMedium,
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                children: [
+                                  OpenetraStatusBadge(
+                                    label: 'Mode: ${resourceState.resourceState.operatingMode.name.toUpperCase()}',
+                                    icon: Icons.bolt_outlined,
+                                    tone: OpenetraBadgeTone.info,
+                                  ),
+                                  OpenetraStatusBadge(
+                                    label: prefs.preferredLanguage,
+                                    icon: Icons.translate_outlined,
+                                    tone: OpenetraBadgeTone.neutral,
+                                  ),
+                                  OpenetraStatusBadge(
+                                    label: 'Battery ${resourceState.resourceState.batteryPercent}%',
+                                    icon: Icons.battery_std_outlined,
+                                    tone: resourceState.resourceState.batteryPercent <= 20
+                                        ? OpenetraBadgeTone.warning
+                                        : OpenetraBadgeTone.success,
+                                  ),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 14),
@@ -125,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               subtitle: 'Silences current speech and pauses continuous scan',
                               semanticHint: 'Double tap to immediately stop audio output',
                               icon: Icons.stop_circle_outlined,
-                              accentBorderColor: OpenetraTheme.hazardCritical,
+                              accentBorderColor: palette.error,
                               minHeight: 68,
                               onPressed: () {
                                 widget.coordinator.stopAll();
@@ -167,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   'Checks path for obstacles, stairs, vehicles & low light',
                               semanticHint: 'Double tap to scan for potential hazards',
                               icon: Icons.warning_amber_rounded,
-                              accentBorderColor: OpenetraTheme.hazardWarning,
+                              accentBorderColor: palette.warning,
                               onPressed: isBusy
                                   ? null
                                   : () => widget.coordinator.runHazardScan(),
@@ -226,8 +245,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   'Double tap to toggle continuous hazard awareness',
                               icon: Icons.radar,
                               accentBorderColor: widget.coordinator.isHazardLoopActive
-                                  ? OpenetraTheme.hazardCritical
-                                  : OpenetraTheme.hazardWarning,
+                                  ? palette.error
+                                  : palette.warning,
                               filledAccent: widget.coordinator.isHazardLoopActive,
                               onPressed: () async {
                                 await widget.coordinator
@@ -299,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 semanticHint:
                                     'Double tap to open emergency assistance and contacts',
                                 icon: Icons.emergency_outlined,
-                                accentBorderColor: OpenetraTheme.hazardCritical,
+                                accentBorderColor: palette.error,
                                 onPressed: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute<void>(
@@ -320,30 +339,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: TextField(
+                                  child: OpenetraTextField(
                                     controller: _voicePromptController,
-                                    style: const TextStyle(
-                                      color: OpenetraTheme.primaryText,
-                                    ),
-                                    decoration: const InputDecoration(
-                                      labelText:
-                                          'Offline Command / Follow-up (EN/HI/KN)',
-                                      labelStyle: TextStyle(
-                                        color: OpenetraTheme.secondaryText,
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: OpenetraTheme.border,
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(
-                                          color: OpenetraTheme.accent,
-                                          width: 2,
-                                        ),
-                                      ),
-                                    ),
+                                    labelText:
+                                        'Offline Command / Follow-up (EN/HI/KN)',
                                     onSubmitted: (value) {
                                       if (value.trim().isNotEmpty) {
                                         widget.coordinator.handleVoiceCommand(value);
@@ -359,8 +358,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   child: ElevatedButton(
                                     style: ElevatedButton.styleFrom(
                                       minimumSize: const Size(84, 60),
-                                      backgroundColor: OpenetraTheme.accent,
-                                      foregroundColor: OpenetraTheme.accentText,
+                                      backgroundColor: palette.secondary,
+                                      foregroundColor: palette.onAccent,
                                     ),
                                     onPressed: () {
                                       final txt = _voicePromptController.text.trim();

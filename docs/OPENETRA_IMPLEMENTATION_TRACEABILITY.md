@@ -1,0 +1,17 @@
+# Openetra — UI/UX Transformation Implementation Traceability Matrix
+
+**Baseline Commit:** `31fc775` (`v2.2.0-scene-memory-and-object-callouts`)  
+**Status:** Stages A–G Complete & Verified (`75/75` tests passing, `0` analyze issues)
+
+| Requirement ID | Requirement | Existing Implementation (Baseline) | Actual Change | Verification Test | Status |
+|---|---|---|---|---|---|
+| UI-001 | Premium semantic design system (Dark + Light themes, spacing, typography, motion) | `lib/app/theme.dart` (dark-only, 5 text styles) | Added `OpenetraPalette` `ThemeExtension` (`dark` & `light`), `OpenetraSpacing`, `OpenetraMotion`, full 9-slot `TextTheme`, input/card/dialog/slider themes, and persisted `ThemeMode` in `SettingsBloc` | `test/ui/design_system_and_a11y_test.dart` | **Verified** |
+| UI-002 | Reusable accessible component library | `accessible_action_tile.dart` (2 widgets) | Upgraded `AccessibleActionTile` & `SpokenStatusBanner` to `OpenetraPalette`; added `OpenetraSectionHeader`, `OpenetraCard`, `OpenetraStatusBadge`, `OpenetraEmptyState`, `OpenetraTextField`, `showOpenetraConfirmDialog` in `lib/shared/widgets/openetra_components.dart` | `test/ui/design_system_and_a11y_test.dart` | **Verified** |
+| UI-003 | Screen-wide visual & hierarchy consistency | 134 hardcoded `OpenetraTheme.*` calls across 13 screens + 3 dial widgets | Reduced hardcoded colors from **134 -> 0** across all 13 screens & 3 dial widgets; added Appearance theme selector and collapsible 8-language picker in `SettingsScreen` | `test/ui/design_system_and_a11y_test.dart` + all widget tests | **Verified** |
+| A11Y-001 | TalkBack landmarks, WCAG AAA contrast, 2.0x text scaling, reduced motion | Missing header landmarks on 2 screens; no Light theme | Added `OpenetraSectionHeader` landmarks; automated WCAG AAA contrast (`#B84F00` fix), `2.0x` text scale overflow check, and `disableAnimations` test | `test/ui/design_system_and_a11y_test.dart`, `voice_first_accessibility_widget_test.dart` | **Verified** |
+| DIAL-001 | Slide-up selection & submenu navigation | `AssistiveDial`, `AssistiveDialBloc`, `DialGestureAnalyzer` | Made radial dial, `DialCenter`, and 20 `DialFocusGlyph` emblems fully Dark/Light theme-aware using `OpenetraPalette` & `OpenetraMotion` | `test/features/dial/assistive_dial_test.dart` (`7/7`) | **Verified** |
+| DIAL-002 | Slide-down back / cancel / two-step root exit | `AssistiveDialBloc` + `DialGestureAnalyzer` | Preserved exact contract + reduced-motion support | `test/features/dial/assistive_dial_test.dart` (`7/7`) | **Verified** |
+| VOICE-001 | Concise non-overlapping announcements in 8 languages | `AudioArbitrator`, `SpeechController`, `OpenetraLocalizer` | Preserved untouched | `assistive_dial_test.dart`, `openetra_localizer_test.dart` | **Verified** |
+| HAPTIC-001 | Distinct 10-pattern haptic vocabulary | `HapticFeedbackManager`, `HapticsPlugin.kt` | Preserved untouched | `assistive_dial_test.dart` | **Verified** |
+| PERF-001 | Zero idle animation, lightweight Flutter motion, 0 new deps | 9 runtime deps; idle animation stopped | 0 new deps; scoped `buildWhen` on `MaterialApp` theme; `OpenetraMotion` honors reduced motion | `flutter analyze`, `flutter test`, APK build | **Verified** |
+| REG-001 | Zero functional regressions across all existing workflows | `71/71` baseline tests passing | **`75/75` tests passing**, `0` analyze issues, arm64 APK rebuilt | Full `flutter test -r expanded` | **Verified** |

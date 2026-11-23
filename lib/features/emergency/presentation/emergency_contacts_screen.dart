@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../app/theme.dart';
 import '../../../core/assistive/audio_arbitrator.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../../shared/widgets/openetra_components.dart';
 import '../bloc/emergency_bloc.dart';
 import '../domain/trusted_contact.dart';
 
@@ -54,41 +55,20 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                 'Trusted contacts are encrypted locally using Android Keystore AES-256-GCM and never uploaded or logged.',
               ),
               const SizedBox(height: 14),
-              TextField(
+              OpenetraTextField(
                 controller: _nameController,
-                style: const TextStyle(color: OpenetraTheme.primaryText, fontSize: 18),
-                decoration: const InputDecoration(
-                  labelText: 'Trusted Contact Name',
-                  labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: OpenetraTheme.border),
-                  ),
-                ),
+                labelText: 'Trusted Contact Name',
               ),
-              const SizedBox(height: 10),
-              TextField(
+              const SizedBox(height: OpenetraSpacing.sm + 2),
+              OpenetraTextField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
-                style: const TextStyle(color: OpenetraTheme.primaryText, fontSize: 18),
-                decoration: const InputDecoration(
-                  labelText: 'Phone Number (e.g. +9198XXXXXXXX)',
-                  labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: OpenetraTheme.border),
-                  ),
-                ),
+                labelText: 'Phone Number (e.g. +9198XXXXXXXX)',
               ),
-              const SizedBox(height: 10),
-              TextField(
+              const SizedBox(height: OpenetraSpacing.sm + 2),
+              OpenetraTextField(
                 controller: _relationController,
-                style: const TextStyle(color: OpenetraTheme.primaryText, fontSize: 18),
-                decoration: const InputDecoration(
-                  labelText: 'Relationship (optional, e.g. Sister, Caregiver)',
-                  labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: OpenetraTheme.border),
-                  ),
-                ),
+                labelText: 'Relationship (optional, e.g. Sister, Caregiver)',
               ),
               const SizedBox(height: 12),
               AccessibleActionTile(
@@ -199,13 +179,15 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                               onPressed: () => context
                                   .read<EmergencyBloc>()
                                   .add(RemoveTrustedContact(c.id)),
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.delete_outline,
-                                color: OpenetraTheme.hazardCritical,
+                                color: OpenetraTheme.paletteOf(context).error,
                               ),
-                              label: const Text(
+                              label: Text(
                                 'Remove',
-                                style: TextStyle(color: OpenetraTheme.hazardCritical),
+                                style: TextStyle(
+                                  color: OpenetraTheme.paletteOf(context).error,
+                                ),
                               ),
                             ),
                           ],

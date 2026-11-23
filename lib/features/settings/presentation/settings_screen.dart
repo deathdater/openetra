@@ -6,6 +6,7 @@ import '../../../core/audio/bloc/audio_bloc.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/resource_management/bloc/device_resource_bloc.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../../shared/widgets/openetra_components.dart';
 import '../../emergency/bloc/emergency_bloc.dart';
 import '../../emergency/presentation/emergency_assistance_screen.dart';
 import '../../dial/bloc/assistive_dial_bloc.dart';
@@ -40,6 +41,8 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  bool _languagesExpanded = false;
+
   static const List<({String locale, String label})> _languages = [
     (locale: 'en-IN', label: 'English (India)'),
     (locale: 'hi-IN', label: 'Hindi (हिन्दी)'),
@@ -61,9 +64,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             builder: (context, resState) {
               final prefs = settingsState.preferences;
               final mode = resState.resourceState.operatingMode;
+              final palette = OpenetraTheme.paletteOf(context);
+              final activeLangEntry = _languages.firstWhere(
+                (l) => l.locale == prefs.preferredLanguage,
+                orElse: () => _languages.first,
+              );
+              final activeOfflineOk =
+                  resState.offlineVoiceSupport[activeLangEntry.locale] ?? false;
 
               return ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(OpenetraSpacing.lg),
                 children: [
                   if (settingsState.statusMessage != null) ...[
                     SpokenStatusBanner(
@@ -71,50 +81,93 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       isDegraded: false,
                       isBusy: false,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: OpenetraSpacing.lg),
                   ],
-                  Semantics(
-                    header: true,
-                    child: Text(
-                      'Speech Language & Offline Voice Status',
-                      style: Theme.of(context).textTheme.titleLarge,
+                  const OpenetraSectionHeader(
+                    title: 'Appearance & Theme',
+                    subtitle: 'Choose Deep Aubergine dark mode or Warm White light mode for low vision',
+                  ),
+                  Wrap(
+                    spacing: OpenetraSpacing.sm,
+                    runSpacing: OpenetraSpacing.sm,
+                    children: [
+                      for (final opt in const [
+                        (mode: ThemeMode.dark, label: 'Dark Aubergine', icon: Icons.dark_mode_outlined),
+                        (mode: ThemeMode.light, label: 'Warm White Light', icon: Icons.light_mode_outlined),
+                        (mode: ThemeMode.system, label: 'System', icon: Icons.brightness_auto_outlined),
+                      ])
+                        ChoiceChip(
+                          selected: settingsState.themeMode == opt.mode,
+                          label: Text(opt.label),
+                          avatar: Icon(opt.icon, size: 18),
+                          selectedColor: palette.secondary,
+                          labelStyle: TextStyle(
+                            color: settingsState.themeMode == opt.mode
+                                ? palette.onAccent
+                                : palette.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          onSelected: (_) => context
+                              .read<SettingsBloc>()
+                              .add(UpdateThemeMode(opt.mode)),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: OpenetraSpacing.xl),
+                  const OpenetraSectionHeader(
+                    title: 'Voice & Language',
+                    subtitle: 'Active offline speech language and speed',
+                  ),
+                  AccessibleActionTile(
+                    title: 'Language: ${activeLangEntry.label}',
+                    subtitle: activeOfflineOk
+                        ? 'Offline voice verified • Tap to ${_languagesExpanded ? "hide" : "change"} language'
+                        : 'Offline voice unverified • Tap to ${_languagesExpanded ? "hide" : "change"} language',
+                    semanticHint: 'Double tap to expand or collapse all 8 supported languages',
+                    icon: _languagesExpanded
+                        ? Icons.expand_less_rounded
+                        : Icons.translate_outlined,
+                    filledAccent: true,
+                    onPressed: () => setState(
+                      () => _languagesExpanded = !_languagesExpanded,
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  ..._languages.map((lang) {
-                    final selected = prefs.preferredLanguage == lang.locale;
-                    final offlineOk =
-                        resState.offlineVoiceSupport[lang.locale] ?? false;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: AccessibleActionTile(
-                        title: '${lang.label}${selected ? " (Active)" : ""}',
-                        subtitle: offlineOk
-                            ? 'Offline voice verified on device'
-                            : 'Offline voice unverified — check device TTS settings',
-                        semanticHint: 'Double tap to select ${lang.label}',
-                        icon: selected
-                            ? Icons.radio_button_checked
-                            : Icons.radio_button_off,
-                        filledAccent: selected,
-                        onPressed: () {
-                          context
-                              .read<SettingsBloc>()
-                              .add(UpdatePreferredLanguage(lang.locale));
-                          context
-                              .read<AudioBloc>()
-                              .add(UpdateSpeechConfig(locale: lang.locale));
-                        },
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 16),
-                  Semantics(
-                    header: true,
-                    child: Text(
-                      'Speech Speed (${prefs.speechRate.toStringAsFixed(2)})',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
+                  if (_languagesExpanded) ...[
+                    const SizedBox(height: OpenetraSpacing.sm),
+                    ..._languages.map((lang) {
+                      final selected = prefs.preferredLanguage == lang.locale;
+                      final offlineOk =
+                          resState.offlineVoiceSupport[lang.locale] ?? false;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: OpenetraSpacing.sm),
+                        child: AccessibleActionTile(
+                          title: '${lang.label}${selected ? " (Active)" : ""}',
+                          subtitle: offlineOk
+                              ? 'Offline voice verified on device'
+                              : 'Offline voice unverified — check device TTS settings',
+                          semanticHint: 'Double tap to select ${lang.label}',
+                          icon: selected
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_off,
+                          minHeight: 66,
+                          filledAccent: selected,
+                          onPressed: () {
+                            context
+                                .read<SettingsBloc>()
+                                .add(UpdatePreferredLanguage(lang.locale));
+                            context
+                                .read<AudioBloc>()
+                                .add(UpdateSpeechConfig(locale: lang.locale));
+                            setState(() => _languagesExpanded = false);
+                          },
+                        ),
+                      );
+                    }),
+                  ],
+                  const SizedBox(height: OpenetraSpacing.lg),
+                  Text(
+                    'Speech Speed (${prefs.speechRate.toStringAsFixed(2)}x)',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                   Slider(
                     value: prefs.speechRate,
@@ -129,15 +182,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           .add(UpdateSpeechConfig(speechRate: value));
                     },
                   ),
-                  const SizedBox(height: 16),
-                  Semantics(
-                    header: true,
-                    child: Text(
-                      'Power & Operating Mode',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
+                  const SizedBox(height: OpenetraSpacing.lg),
+                  const OpenetraSectionHeader(
+                    title: 'Power & Operating Mode',
                   ),
-                  const SizedBox(height: 10),
                   ...OperatingMode.values.map((m) {
                     final active = mode == m;
                     return Padding(
@@ -211,7 +259,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: 'Configure AES-encrypted trusted contacts & test flow',
                       semanticHint: 'Double tap to configure emergency assistance',
                       icon: Icons.emergency_outlined,
-                      accentBorderColor: OpenetraTheme.hazardWarning,
+                      accentBorderColor: palette.warning,
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
@@ -352,6 +400,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                   ],
+                  const OpenetraSectionHeader(
+                    title: 'Privacy & Data',
+                  ),
                   AccessibleActionTile(
                     title: 'Delete All Personal Data',
                     subtitle:
@@ -359,38 +410,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     semanticHint:
                         'Double tap to open confirmation dialog before deleting personal data',
                     icon: Icons.delete_forever,
-                    accentBorderColor: OpenetraTheme.hazardCritical,
+                    accentBorderColor: palette.error,
                     onPressed: () async {
                       final settingsBloc = context.read<SettingsBloc>();
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (dialogContext) => AlertDialog(
-                          backgroundColor: OpenetraTheme.surface,
-                          title: const Text(
-                            'Delete All Personal Data?',
-                            style: TextStyle(color: OpenetraTheme.primaryText),
-                          ),
-                          content: const Text(
+                      final confirmed = await showOpenetraConfirmDialog(
+                        context,
+                        title: 'Delete All Personal Data?',
+                        message:
                             'This permanently removes saved personal items, scanned documents, conversation history, and safety logs. Built-in product staples remain offline.',
-                            style: TextStyle(color: OpenetraTheme.secondaryText),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(dialogContext).pop(false),
-                              child: const Text('Cancel'),
-                            ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: OpenetraTheme.hazardCritical,
-                                foregroundColor: Colors.black,
-                              ),
-                              onPressed: () => Navigator.of(dialogContext).pop(true),
-                              child: const Text('Permanently Delete'),
-                            ),
-                          ],
-                        ),
+                        confirmLabel: 'Permanently Delete',
+                        isDestructive: true,
                       );
-                      if (confirmed == true) {
+                      if (confirmed) {
                         settingsBloc.add(const DeleteAllUserDataRequested());
                       }
                     },

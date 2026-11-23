@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../app/openetra_coordinator.dart';
 import '../../../../shared/widgets/accessible_action_tile.dart';
+import '../../../../shared/widgets/openetra_components.dart';
 import '../../../emergency/presentation/emergency_assistance_screen.dart';
 import '../../../flashlight/presentation/flashlight_settings_screen.dart';
 import '../../../floating_companion/presentation/floating_widget_settings_screen.dart';
@@ -161,15 +162,41 @@ class _AssistiveDialPageState extends State<AssistiveDialPage> {
           },
           builder: (context, state) {
             final bloc = context.read<AssistiveDialBloc>();
+            final activeLang =
+                context.watch<SettingsBloc>().state.preferences.preferredLanguage;
             return Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                  child: SpokenStatusBanner(
-                    statusText: state.statusAnnouncement,
-                    isDegraded: state.phase == DialLifecyclePhase.failed ||
-                        state.phase == DialLifecyclePhase.exitArmed,
-                    isBusy: state.isBusy,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          const OpenetraStatusBadge(
+                            label: 'Offline Ready',
+                            icon: Icons.offline_pin_outlined,
+                            tone: OpenetraBadgeTone.success,
+                            semanticLabel: 'Openetra is ready offline on device',
+                          ),
+                          OpenetraStatusBadge(
+                            label: activeLang,
+                            icon: Icons.translate_outlined,
+                            tone: OpenetraBadgeTone.info,
+                            semanticLabel: 'Active voice language $activeLang',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SpokenStatusBanner(
+                        statusText: state.statusAnnouncement,
+                        isDegraded: state.phase == DialLifecyclePhase.failed ||
+                            state.phase == DialLifecyclePhase.exitArmed,
+                        isBusy: state.isBusy,
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(

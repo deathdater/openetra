@@ -177,10 +177,13 @@ class _AssistiveDialState extends State<AssistiveDial> {
                           child: CustomPaint(
                             size: Size(dialExtent, dialExtent),
                             painter: _RadialMarkersPainter(
+                              palette: OpenetraTheme.paletteOf(context),
                               optionCount: options.length,
                               activeIndex: safeIdx,
-                              accentColor:
-                                  DialCenter.ringColorForPhase(widget.phase),
+                              accentColor: DialCenter.ringColorForPhase(
+                                widget.phase,
+                                OpenetraTheme.paletteOf(context),
+                              ),
                             ),
                           ),
                         ),
@@ -218,7 +221,7 @@ class _AssistiveDialState extends State<AssistiveDial> {
                   'Option ${safeIdx + 1} of ${options.length} • ${widget.menu.title}',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: OpenetraTheme.accentLavender,
+                        color: OpenetraTheme.paletteOf(context).primary,
                         fontWeight: FontWeight.w600,
                       ),
                 ),
@@ -315,23 +318,23 @@ class _DirectionalCue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        highlight ? OpenetraTheme.accent : OpenetraTheme.secondaryText;
+    final palette = OpenetraTheme.paletteOf(context);
+    final color = highlight ? palette.secondary : palette.textSecondary;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 20, color: color),
+        ExcludeSemantics(child: Icon(icon, size: 20, color: color)),
         const SizedBox(width: 4),
         Flexible(
           child: Text(
             label,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: color,
-              fontSize: 14,
-              fontWeight: highlight ? FontWeight.w700 : FontWeight.w500,
-            ),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: color,
+                  fontSize: 14,
+                  fontWeight: highlight ? FontWeight.w700 : FontWeight.w500,
+                ),
           ),
         ),
       ],
@@ -356,8 +359,9 @@ class _DialAccessibleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = filled ? OpenetraTheme.accent : OpenetraTheme.surfaceElevated;
-    final fg = filled ? OpenetraTheme.accentText : OpenetraTheme.primaryText;
+    final palette = OpenetraTheme.paletteOf(context);
+    final bg = filled ? palette.secondary : palette.surfaceElevated;
+    final fg = filled ? palette.onAccent : palette.textPrimary;
 
     return Semantics(
       button: true,
@@ -365,34 +369,33 @@ class _DialAccessibleButton extends StatelessWidget {
       hint: semanticHint,
       child: Material(
         color: bg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(OpenetraSpacing.radiusMd),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(OpenetraSpacing.radiusMd),
           onTap: onPressed,
           child: Container(
             constraints: const BoxConstraints(minHeight: 64),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(OpenetraSpacing.radiusMd),
               border: Border.all(
-                color: filled ? OpenetraTheme.accent : OpenetraTheme.border,
+                color: filled ? palette.secondary : palette.border,
                 width: 1.5,
               ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 22, color: fg),
+                ExcludeSemantics(child: Icon(icon, size: 22, color: fg)),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
                     label,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: fg,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: fg,
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                 ),
               ],
@@ -406,11 +409,13 @@ class _DialAccessibleButton extends StatelessWidget {
 
 class _RadialMarkersPainter extends CustomPainter {
   const _RadialMarkersPainter({
+    required this.palette,
     required this.optionCount,
     required this.activeIndex,
     required this.accentColor,
   });
 
+  final OpenetraPalette palette;
   final int optionCount;
   final int activeIndex;
   final Color accentColor;
@@ -423,7 +428,7 @@ class _RadialMarkersPainter extends CustomPainter {
 
     // Precision watch-dial micro-ticks around outer perimeter
     final microTickPaint = Paint()
-      ..color = OpenetraTheme.border.withOpacity(0.35)
+      ..color = palette.border.withOpacity(0.42)
       ..strokeWidth = 1.4
       ..strokeCap = StrokeCap.round;
     const tickCount = 36;
@@ -440,7 +445,7 @@ class _RadialMarkersPainter extends CustomPainter {
 
     // Subtle track ring
     final trackPaint = Paint()
-      ..color = OpenetraTheme.border.withOpacity(0.45)
+      ..color = palette.border.withOpacity(0.50)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8;
     canvas.drawCircle(center, ringRadius, trackPaint);
@@ -449,7 +454,7 @@ class _RadialMarkersPainter extends CustomPainter {
     final activeAngle = -math.pi / 2 + (2 * math.pi * activeIndex / optionCount);
     final sweep = (2 * math.pi / math.max(optionCount, 3)) * 0.55;
     final sectorPaint = Paint()
-      ..color = OpenetraTheme.accent.withOpacity(0.85)
+      ..color = palette.secondary.withOpacity(0.88)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.6
       ..strokeCap = StrokeCap.round;
@@ -462,13 +467,13 @@ class _RadialMarkersPainter extends CustomPainter {
     );
 
     final inactivePaint = Paint()
-      ..color = OpenetraTheme.secondaryText.withOpacity(0.48)
+      ..color = palette.textSecondary.withOpacity(0.48)
       ..style = PaintingStyle.fill;
     final activePaint = Paint()
-      ..color = OpenetraTheme.accent
+      ..color = palette.secondary
       ..style = PaintingStyle.fill;
     final activeHalo = Paint()
-      ..color = accentColor.withOpacity(0.36)
+      ..color = accentColor.withOpacity(0.32)
       ..style = PaintingStyle.fill;
 
     for (var i = 0; i < optionCount; i++) {
@@ -488,7 +493,8 @@ class _RadialMarkersPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _RadialMarkersPainter oldDelegate) {
-    return oldDelegate.optionCount != optionCount ||
+    return oldDelegate.palette != palette ||
+        oldDelegate.optionCount != optionCount ||
         oldDelegate.activeIndex != activeIndex ||
         oldDelegate.accentColor != accentColor;
   }

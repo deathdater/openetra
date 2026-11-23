@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../app/theme.dart';
 import '../../../core/assistive/assistive_action.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../../shared/widgets/openetra_components.dart';
 import '../bloc/gesture_automation_bloc.dart';
 
 class GestureAutomationScreen extends StatefulWidget {
@@ -77,7 +78,7 @@ class _GestureAutomationScreenState extends State<GestureAutomationScreen> {
                 semanticHint:
                     'Double tap to toggle emergency gesture safeguard opt-in',
                 icon: Icons.warning_amber_rounded,
-                accentBorderColor: OpenetraTheme.hazardWarning,
+                accentBorderColor: OpenetraTheme.paletteOf(context).warning,
                 filledAccent: state.emergencyGestureOptIn,
                 onPressed: () => context.read<GestureAutomationBloc>().add(
                       SetEmergencyGestureOptIn(!state.emergencyGestureOptIn),
@@ -129,34 +130,17 @@ class _GestureAutomationScreenState extends State<GestureAutomationScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              TextField(
+              OpenetraTextField(
                 controller: _nameController,
-                style: const TextStyle(
-                  color: OpenetraTheme.primaryText,
-                  fontSize: 18,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Gesture Name (e.g. Open Palm, Peace Sign)',
-                  labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: OpenetraTheme.border),
-                  ),
-                ),
+                labelText: 'Gesture Name (e.g. Open Palm, Peace Sign)',
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: OpenetraSpacing.sm + 2),
               DropdownButtonFormField<AssistiveActionId>(
                 value: _selectedAction,
-                dropdownColor: OpenetraTheme.surface,
-                style: const TextStyle(
-                  color: OpenetraTheme.primaryText,
-                  fontSize: 16,
-                ),
+                dropdownColor: OpenetraTheme.paletteOf(context).surfaceElevated,
+                style: Theme.of(context).textTheme.bodyLarge,
                 decoration: const InputDecoration(
                   labelText: 'Mapped Openetra Action',
-                  labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: OpenetraTheme.border),
-                  ),
                 ),
                 items: [
                   for (final item in _mappableActions)
@@ -216,23 +200,19 @@ class _GestureAutomationScreenState extends State<GestureAutomationScreen> {
               ),
               const SizedBox(height: 10),
               if (state.gestures.isEmpty)
-                const Text('No personal gestures enrolled yet.')
+                const OpenetraEmptyState(
+                  icon: Icons.pan_tool_outlined,
+                  title: 'No personal gestures enrolled yet',
+                  message:
+                      'Name a gesture above, choose an Openetra action, and record 5 samples offline.',
+                )
               else
                 for (final g in state.gestures)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: OpenetraTheme.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: g.isValidated
-                              ? OpenetraTheme.accent
-                              : OpenetraTheme.border,
-                        ),
-                      ),
-                      child: Column(
+                  OpenetraCard(
+                    borderColor: g.isValidated
+                        ? OpenetraTheme.paletteOf(context).secondary
+                        : OpenetraTheme.paletteOf(context).border,
+                    child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
@@ -273,7 +253,6 @@ class _GestureAutomationScreenState extends State<GestureAutomationScreen> {
                         ],
                       ),
                     ),
-                  ),
             ],
           );
         },

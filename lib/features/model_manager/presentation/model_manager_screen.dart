@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../app/theme.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../../shared/widgets/openetra_components.dart';
 import '../bloc/model_manager_bloc.dart';
 
 class ModelManagerScreen extends StatelessWidget {
@@ -47,45 +48,39 @@ class ModelManagerScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               ...state.models.map((m) {
+                final palette = OpenetraTheme.paletteOf(context);
                 final mb = (m.sizeBytes / (1024 * 1024)).toStringAsFixed(1);
                 final ready = m.status == ModelStatus.loadedInMemory ||
                     m.status == ModelStatus.verifiedReady;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: OpenetraTheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: ready
-                            ? OpenetraTheme.okGreen
-                            : OpenetraTheme.border,
-                        width: 1.5,
+                return OpenetraCard(
+                  borderColor: ready ? palette.success : palette.border,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        m.displayName,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          m.displayName,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Status: ${m.status.name} | Runtime: ${m.runtime.name}',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        Text(
-                          'Size: $mb MB | Licence: ${m.licence} | Quant: ${m.quantization}',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        Text(
-                          'Languages: ${m.languages.join(", ")}',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
+                      const SizedBox(height: 6),
+                      OpenetraStatusBadge(
+                        label: '${m.status.name} · ${m.runtime.name}',
+                        icon: ready
+                            ? Icons.check_circle_outline
+                            : Icons.pending_outlined,
+                        tone: ready
+                            ? OpenetraBadgeTone.success
+                            : OpenetraBadgeTone.neutral,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Size: $mb MB | Licence: ${m.licence} | Quant: ${m.quantization}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      Text(
+                        'Languages: ${m.languages.join(", ")}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
                   ),
                 );
               }),

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../app/theme.dart';
 import '../../../core/assistive/assistive_action.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../../shared/widgets/openetra_components.dart';
 import '../bloc/floating_companion_bloc.dart';
 
 class FloatingWidgetSettingsScreen extends StatelessWidget {
@@ -24,9 +25,11 @@ class FloatingWidgetSettingsScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Floating Assistive Companion')),
       body: BlocBuilder<FloatingCompanionBloc, FloatingCompanionState>(
         builder: (context, state) {
+          final palette = OpenetraTheme.paletteOf(context);
+          final textTheme = Theme.of(context).textTheme;
           final cfg = state.config;
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(OpenetraSpacing.lg),
             children: [
               SpokenStatusBanner(
                 statusText: state.statusMessage ??
@@ -36,7 +39,8 @@ class FloatingWidgetSettingsScreen extends StatelessWidget {
                 isDegraded: !state.overlayPermissionGranted,
                 isBusy: state.serviceRunning,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: OpenetraSpacing.lg),
+              const OpenetraSectionHeader(title: 'Overlay Control'),
               if (!state.overlayPermissionGranted) ...[
                 AccessibleActionTile(
                   title: 'Grant Overlay Permission (Android Settings)',
@@ -44,13 +48,13 @@ class FloatingWidgetSettingsScreen extends StatelessWidget {
                       'Required so Openetra can show an optional floating orb above other apps',
                   semanticHint: 'Double tap to open Android Display Over Other Apps settings',
                   icon: Icons.layers_outlined,
-                  accentBorderColor: OpenetraTheme.hazardWarning,
+                  accentBorderColor: palette.warning,
                   filledAccent: true,
                   onPressed: () => context
                       .read<FloatingCompanionBloc>()
                       .add(const RequestOpenOverlaySettings()),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: OpenetraSpacing.md),
               ],
               AccessibleActionTile(
                 title: cfg.enabled && state.serviceRunning
@@ -65,7 +69,7 @@ class FloatingWidgetSettingsScreen extends StatelessWidget {
                     .read<FloatingCompanionBloc>()
                     .add(ToggleFloatingCompanion(!(cfg.enabled && state.serviceRunning))),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: OpenetraSpacing.md),
               AccessibleActionTile(
                 title: cfg.reducedMotionOverride
                     ? 'Reduced Motion Glow: Enabled'
@@ -83,17 +87,14 @@ class FloatingWidgetSettingsScreen extends StatelessWidget {
                       ),
                     ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: OpenetraSpacing.lg),
+              const OpenetraSectionHeader(title: 'Orb Actions & Size'),
               DropdownButtonFormField<AssistiveActionId>(
                 value: cfg.primaryAction,
-                dropdownColor: OpenetraTheme.surface,
-                style: const TextStyle(color: OpenetraTheme.primaryText, fontSize: 16),
+                dropdownColor: palette.surfaceElevated,
+                style: textTheme.bodyLarge,
                 decoration: const InputDecoration(
                   labelText: 'Single Tap Action',
-                  labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: OpenetraTheme.border),
-                  ),
                 ),
                 items: [
                   for (final item in _tapActions)
@@ -109,17 +110,13 @@ class FloatingWidgetSettingsScreen extends StatelessWidget {
                   }
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: OpenetraSpacing.md),
               DropdownButtonFormField<AssistiveActionId>(
                 value: cfg.longPressAction,
-                dropdownColor: OpenetraTheme.surface,
-                style: const TextStyle(color: OpenetraTheme.primaryText, fontSize: 16),
+                dropdownColor: palette.surfaceElevated,
+                style: textTheme.bodyLarge,
                 decoration: const InputDecoration(
                   labelText: 'Long Press Action',
-                  labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: OpenetraTheme.border),
-                  ),
                 ),
                 items: [
                   for (final item in _tapActions)

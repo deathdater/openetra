@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../app/openetra_coordinator.dart';
 import '../../../app/theme.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../../shared/widgets/openetra_components.dart';
 import '../domain/recorded_scene_memory.dart';
 
 /// Accessible offline screen for recording multi-frame scene clips, reviewing
@@ -125,13 +126,15 @@ class _SceneMemoryScreenState extends State<SceneMemoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = OpenetraTheme.paletteOf(context);
+    final textTheme = Theme.of(context).textTheme;
     final activeLocale =
         widget.coordinator.settingsBloc.state.preferences.preferredLanguage;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Recorded Scene Memories')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(OpenetraSpacing.lg),
         children: [
           if (_statusMessage != null) ...[
             SpokenStatusBanner(
@@ -139,44 +142,22 @@ class _SceneMemoryScreenState extends State<SceneMemoryScreen> {
               isDegraded: false,
               isBusy: _isRecording,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: OpenetraSpacing.lg),
           ],
-          TextField(
+          const OpenetraSectionHeader(
+            title: 'Record New Scene Clip',
+            subtitle: 'Slowly pan the camera across your surroundings to store a full offline breakdown',
+          ),
+          OpenetraTextField(
             controller: _titleController,
-            style: const TextStyle(
-              color: OpenetraTheme.primaryText,
-              fontSize: 18,
-            ),
-            decoration: const InputDecoration(
-              labelText: 'Scene title (optional, e.g., Living room, Desk)',
-              labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: OpenetraTheme.border, width: 1.5),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: OpenetraTheme.accent, width: 2),
-              ),
-            ),
+            labelText: 'Scene title (optional, e.g., Living room, Desk)',
           ),
-          const SizedBox(height: 12),
-          TextField(
+          const SizedBox(height: OpenetraSpacing.md),
+          OpenetraTextField(
             controller: _noteController,
-            style: const TextStyle(
-              color: OpenetraTheme.primaryText,
-              fontSize: 18,
-            ),
-            decoration: const InputDecoration(
-              labelText: 'Spoken note to attach (optional)',
-              labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: OpenetraTheme.border, width: 1.5),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: OpenetraTheme.accent, width: 2),
-              ),
-            ),
+            labelText: 'Spoken note to attach (optional)',
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: OpenetraSpacing.md),
           AccessibleActionTile(
             title: _isRecording
                 ? 'Recording Scene Pan...'
@@ -189,20 +170,23 @@ class _SceneMemoryScreenState extends State<SceneMemoryScreen> {
             filledAccent: true,
             onPressed: _isRecording ? null : _recordNewScene,
           ),
-          const SizedBox(height: 22),
-          Semantics(
-            header: true,
-            child: Text(
-              'Saved Scene Breakdowns (${_scenes.length})',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+          const SizedBox(height: OpenetraSpacing.xl),
+          OpenetraSectionHeader(
+            title: 'Saved Scene Breakdowns (${_scenes.length})',
           ),
-          const SizedBox(height: 12),
           if (_isLoading)
-            const Center(child: CircularProgressIndicator())
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(OpenetraSpacing.xl),
+                child: CircularProgressIndicator(),
+              ),
+            )
           else if (_scenes.isEmpty)
-            const Text(
-              'No recorded scenes stored yet. Tap Record Scene Clip above while slowly panning the camera across your surroundings.',
+            const OpenetraEmptyState(
+              icon: Icons.videocam_off_outlined,
+              title: 'No recorded scenes stored yet',
+              message:
+                  'Tap Record Scene Clip above while slowly panning the camera across your surroundings.',
             )
           else
             ..._scenes.map((scene) {
@@ -210,107 +194,85 @@ class _SceneMemoryScreenState extends State<SceneMemoryScreen> {
               final regNames = scene.recognizedRegisteredObjects
                   .map((m) => m.objectName)
                   .join(', ');
-              return Card(
-                color: OpenetraTheme.surface,
-                margin: const EdgeInsets.only(bottom: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: OpenetraTheme.border),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        scene.title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: OpenetraTheme.primaryText,
-                              fontWeight: FontWeight.w700,
-                            ),
+              return OpenetraCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      scene.title,
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${scene.environment} · ${scene.frameCount} frames · ${scene.items.length} items',
-                        style: const TextStyle(
-                          color: OpenetraTheme.secondaryText,
-                          fontSize: 14,
-                        ),
-                      ),
-                      if (regNames.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          'Registered items spotted: $regNames',
-                          style: const TextStyle(
-                            color: OpenetraTheme.accent,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                      if (scene.customNote != null &&
-                          scene.customNote!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          'Note: ${scene.customNote}',
-                          style: const TextStyle(
-                            color: OpenetraTheme.primaryText,
-                            fontSize: 15,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      Text(
-                        breakdownPreview,
-                        style: const TextStyle(
-                          color: OpenetraTheme.secondaryText,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      AccessibleActionTile(
-                        title: 'Speak Full Breakdown ($activeLocale)',
-                        subtitle: 'Reads the stored scene and your note aloud',
-                        semanticHint:
-                            'Double tap to hear the complete breakdown for ${scene.title}',
-                        icon: Icons.volume_up_outlined,
-                        onPressed: () =>
-                            widget.coordinator.speakRecordedScene(scene),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton.icon(
-                            onPressed: () => _openEditDialog(scene),
-                            icon: const Icon(
-                              Icons.edit_outlined,
-                              color: OpenetraTheme.accent,
-                            ),
-                            label: const Text(
-                              'Modify Note',
-                              style: TextStyle(color: OpenetraTheme.accent),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          TextButton.icon(
-                            onPressed: () => _deleteScene(scene),
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              color: OpenetraTheme.hazardCritical,
-                            ),
-                            label: const Text(
-                              'Delete',
-                              style: TextStyle(
-                                color: OpenetraTheme.hazardCritical,
-                              ),
-                            ),
-                          ),
-                        ],
+                    ),
+                    const SizedBox(height: OpenetraSpacing.xs + 2),
+                    Text(
+                      '${scene.environment} · ${scene.frameCount} frames · ${scene.items.length} items',
+                      style: textTheme.bodySmall,
+                    ),
+                    if (regNames.isNotEmpty) ...[
+                      const SizedBox(height: OpenetraSpacing.sm),
+                      OpenetraStatusBadge(
+                        label: 'Registered items spotted: $regNames',
+                        icon: Icons.bookmark_added_outlined,
+                        tone: OpenetraBadgeTone.accent,
                       ),
                     ],
-                  ),
+                    if (scene.customNote != null &&
+                        scene.customNote!.trim().isNotEmpty) ...[
+                      const SizedBox(height: OpenetraSpacing.sm),
+                      Text(
+                        'Note: ${scene.customNote}',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: palette.textPrimary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: OpenetraSpacing.sm),
+                    Text(
+                      breakdownPreview,
+                      style: textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: OpenetraSpacing.md),
+                    AccessibleActionTile(
+                      title: 'Speak Full Breakdown ($activeLocale)',
+                      subtitle: 'Reads the stored scene and your note aloud',
+                      semanticHint:
+                          'Double tap to hear the complete breakdown for ${scene.title}',
+                      icon: Icons.volume_up_outlined,
+                      onPressed: () =>
+                          widget.coordinator.speakRecordedScene(scene),
+                    ),
+                    const SizedBox(height: OpenetraSpacing.sm),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => _openEditDialog(scene),
+                          icon: Icon(
+                            Icons.edit_outlined,
+                            color: palette.secondary,
+                          ),
+                          label: Text(
+                            'Modify Note',
+                            style: TextStyle(color: palette.secondary),
+                          ),
+                        ),
+                        const SizedBox(width: OpenetraSpacing.sm),
+                        TextButton.icon(
+                          onPressed: () => _deleteScene(scene),
+                          icon: Icon(
+                            Icons.delete_outline,
+                            color: palette.error,
+                          ),
+                          label: Text(
+                            'Delete',
+                            style: TextStyle(color: palette.error),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               );
             }),
@@ -354,52 +316,20 @@ class _EditSceneNoteDialogState extends State<_EditSceneNoteDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: OpenetraTheme.surface,
-      title: const Text(
-        'Modify Scene & Spoken Note',
-        style: TextStyle(color: OpenetraTheme.primaryText),
-      ),
+      title: const Text('Modify Scene & Spoken Note'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+            OpenetraTextField(
               controller: _titleCtrl,
-              style: const TextStyle(
-                color: OpenetraTheme.primaryText,
-                fontSize: 18,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Scene title',
-                labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-                enabledBorder: OutlineInputBorder(
-                  borderSide:
-                      BorderSide(color: OpenetraTheme.border, width: 1.5),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: OpenetraTheme.accent, width: 2),
-                ),
-              ),
+              labelText: 'Scene title',
             ),
-            const SizedBox(height: 14),
-            TextField(
+            const SizedBox(height: OpenetraSpacing.md),
+            OpenetraTextField(
               controller: _noteCtrl,
               maxLines: 3,
-              style: const TextStyle(
-                color: OpenetraTheme.primaryText,
-                fontSize: 18,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Custom note (spoken in active language)',
-                labelStyle: TextStyle(color: OpenetraTheme.secondaryText),
-                enabledBorder: OutlineInputBorder(
-                  borderSide:
-                      BorderSide(color: OpenetraTheme.border, width: 1.5),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: OpenetraTheme.accent, width: 2),
-                ),
-              ),
+              labelText: 'Custom note (spoken in active language)',
             ),
           ],
         ),

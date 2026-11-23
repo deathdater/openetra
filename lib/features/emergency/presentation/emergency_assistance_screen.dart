@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../app/theme.dart';
 import '../../../core/assistive/audio_arbitrator.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
+import '../../../shared/widgets/openetra_components.dart';
 import '../bloc/emergency_bloc.dart';
 import 'emergency_contacts_screen.dart';
 
@@ -31,9 +32,10 @@ class EmergencyAssistanceScreen extends StatelessWidget {
           _announceIfEnabled(state.statusMessage);
         },
         builder: (context, state) {
+          final palette = OpenetraTheme.paletteOf(context);
           final primary = state.primaryContact;
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(OpenetraSpacing.lg),
             children: [
               SpokenStatusBanner(
                 statusText: state.statusMessage ??
@@ -44,21 +46,16 @@ class EmergencyAssistanceScreen extends StatelessWidget {
                     !state.capabilities.dialerAvailable,
                 isBusy: state.awaitingConfirmation,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: OpenetraSpacing.lg),
               if (state.capabilities.airplaneMode ||
                   !state.capabilities.telephonyAvailable)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(
-                    color: OpenetraTheme.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: OpenetraTheme.hazardWarning, width: 1.5),
-                  ),
+                OpenetraCard(
+                  borderColor: palette.warning,
                   child: const Text(
                     'Notice: Airplane mode is enabled or cellular telephony is unavailable on this device. Openetra cannot guarantee external emergency call delivery offline.',
                   ),
                 ),
+              const OpenetraSectionHeader(title: 'Emergency Actions'),
               if (state.awaitingConfirmation) ...[
                 AccessibleActionTile(
                   title: state.pendingIsDryRun
@@ -69,13 +66,13 @@ class EmergencyAssistanceScreen extends StatelessWidget {
                       : 'No contact selected',
                   semanticHint: 'Double tap to confirm emergency action',
                   icon: Icons.phone_forwarded,
-                  accentBorderColor: OpenetraTheme.hazardCritical,
+                  accentBorderColor: palette.error,
                   filledAccent: true,
                   onPressed: () => context
                       .read<EmergencyBloc>()
                       .add(const ConfirmEmergencyInitiation()),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: OpenetraSpacing.md),
                 AccessibleActionTile(
                   title: 'Cancel Emergency Action',
                   subtitle: 'Aborts dialer handoff immediately',
@@ -94,13 +91,13 @@ class EmergencyAssistanceScreen extends StatelessWidget {
                   semanticHint:
                       'Double tap to start confirmed emergency contact flow',
                   icon: Icons.emergency_outlined,
-                  accentBorderColor: OpenetraTheme.hazardCritical,
+                  accentBorderColor: palette.error,
                   filledAccent: primary != null,
                   onPressed: () => context
                       .read<EmergencyBloc>()
                       .add(const RequestEmergencyInitiation(isDryRun: false)),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: OpenetraSpacing.md),
                 AccessibleActionTile(
                   title: 'Test Emergency Flow (No Real Call)',
                   subtitle: 'Exercises confirmation and audio without dialing',
@@ -111,7 +108,8 @@ class EmergencyAssistanceScreen extends StatelessWidget {
                       .add(const RequestEmergencyInitiation(isDryRun: true)),
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: OpenetraSpacing.lg),
+              const OpenetraSectionHeader(title: 'Trusted Contacts'),
               AccessibleActionTile(
                 title: 'Configure Trusted Contacts',
                 subtitle: 'Add, verify digits, select primary, or remove contacts',
