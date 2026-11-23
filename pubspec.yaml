@@ -1,7 +1,7 @@
 name: openetra
 description: "Openetra — Offline-first, low-power AI visual independence platform."
 publish_to: 'none'
-version: 0.2.0+1
+version: 1.0.0+2
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -32,7 +32,12 @@ flutter:
   assets:
     - assets/models/mirage.cact
     - assets/models/tessdata/hin.traineddata
+    - assets/models/tessdata/mar.traineddata
     - assets/models/tessdata/kan.traineddata
+    - assets/models/tessdata/tam.traineddata
+    - assets/models/tessdata/tel.traineddata
+    - assets/models/tessdata/mal.traineddata
+    - assets/models/tessdata/ben.traineddata
     - assets/models/vad/silero_vad.int8.onnx
     - assets/test_fixtures/stop_sign_231049.jpg
     - assets/test_fixtures/living_room_139.jpg

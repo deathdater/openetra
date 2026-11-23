@@ -134,13 +134,42 @@ class SettingsScreen extends StatelessWidget {
                     subtitle:
                         'Wipes saved objects, scanned documents, history, and safety logs',
                     semanticHint:
-                        'Double tap to delete all local personal records permanently',
+                        'Double tap to open confirmation dialog before deleting personal data',
                     icon: Icons.delete_forever,
                     accentBorderColor: OpenetraTheme.hazardCritical,
-                    onPressed: () {
-                      context
-                          .read<SettingsBloc>()
-                          .add(const DeleteAllUserDataRequested());
+                    onPressed: () async {
+                      final settingsBloc = context.read<SettingsBloc>();
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          backgroundColor: OpenetraTheme.surface,
+                          title: const Text(
+                            'Delete All Personal Data?',
+                            style: TextStyle(color: OpenetraTheme.primaryText),
+                          ),
+                          content: const Text(
+                            'This permanently removes saved personal items, scanned documents, conversation history, and safety logs. Built-in product staples remain offline.',
+                            style: TextStyle(color: OpenetraTheme.secondaryText),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(dialogContext).pop(false),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: OpenetraTheme.hazardCritical,
+                                foregroundColor: Colors.black,
+                              ),
+                              onPressed: () => Navigator.of(dialogContext).pop(true),
+                              child: const Text('Permanently Delete'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        settingsBloc.add(const DeleteAllUserDataRequested());
+                      }
                     },
                   ),
                 ],

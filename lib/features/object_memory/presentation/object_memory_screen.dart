@@ -8,9 +8,11 @@ class ObjectMemoryScreen extends StatefulWidget {
   const ObjectMemoryScreen({
     super.key,
     required this.onFindObjectRequested,
+    this.onCaptureAndSaveRequested,
   });
 
   final ValueChanged<String> onFindObjectRequested;
+  final ValueChanged<String>? onCaptureAndSaveRequested;
 
   @override
   State<ObjectMemoryScreen> createState() => _ObjectMemoryScreenState();
@@ -72,6 +74,23 @@ class _ObjectMemoryScreenState extends State<ObjectMemoryScreen> {
                   _nameController.clear();
                 },
               ),
+              if (widget.onCaptureAndSaveRequested != null) ...[
+                const SizedBox(height: 12),
+                AccessibleActionTile(
+                  title: 'Capture Camera & Save Visual Embedding',
+                  subtitle:
+                      'Captures a frame and stores a 96-dim offline visual crop signature',
+                  semanticHint:
+                      'Double tap to capture camera image and save item visual signature',
+                  icon: Icons.camera_alt_outlined,
+                  onPressed: () {
+                    final text = _nameController.text.trim();
+                    if (text.isEmpty) return;
+                    widget.onCaptureAndSaveRequested!(text);
+                    _nameController.clear();
+                  },
+                ),
+              ],
               const SizedBox(height: 20),
               Semantics(
                 header: true,

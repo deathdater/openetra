@@ -60,13 +60,14 @@ class NativeIndicOcrProvider implements OcrProvider {
         );
         final mlText = (raw?['fullText'] as String?)?.trim() ?? '';
         if (mlText.isEmpty) {
+          final devLang = targetLocale.toLowerCase().startsWith('mr') ? 'mar' : 'hin';
           raw = await _channel.invokeMapMethod<String, dynamic>(
             'recognizeTesseract',
             {
               'rgbBytes': rgb,
               'width': frame.width,
               'height': frame.height,
-              'langCode': 'hin',
+              'langCode': devLang,
             },
           );
         }

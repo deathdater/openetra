@@ -31,12 +31,27 @@ class IndicOcrPlugin(
     companion object {
         const val HIN_SHA256 =
             "4c73ffc59d497c186b19d1e90f5d721d678ea6b2e277b719bee4e2af12271825"
+        const val MAR_SHA256 =
+            "0ba3f2d116972e72fe9e176bc84c38e81dfb6670f4ed1f7f6c8e16a27da7cb61"
         const val KAN_SHA256 =
             "bd31e6b6ae93271e3bcf5383d306d8eefbb91542937cd6d735a5930c970e61d8"
+        const val TAM_SHA256 =
+            "d02fbec24be4b07e32e80d0ccfc3b6b67a3c5d61c9d0a7c8532677990912c6ec"
+        const val TEL_SHA256 =
+            "d10691fddd5b67802e1c12800ebb321d3b8bcd8d24a2ac3ff206f93188c04ab5"
+        const val MAL_SHA256 =
+            "bd05cbf1b197e7810d2903419aedb06f9ef77bfedf50b358673c1d18d707cdb4"
+        const val BEN_SHA256 =
+            "31163084c279aaebd376216f0c3d5c17ad4b5fee8db49dae79c20000b5de5964"
 
         private val bundledTrainedData = mapOf(
             "hin" to ("assets/models/tessdata/hin.traineddata" to HIN_SHA256),
-            "kan" to ("assets/models/tessdata/kan.traineddata" to KAN_SHA256)
+            "mar" to ("assets/models/tessdata/mar.traineddata" to MAR_SHA256),
+            "kan" to ("assets/models/tessdata/kan.traineddata" to KAN_SHA256),
+            "tam" to ("assets/models/tessdata/tam.traineddata" to TAM_SHA256),
+            "tel" to ("assets/models/tessdata/tel.traineddata" to TEL_SHA256),
+            "mal" to ("assets/models/tessdata/mal.traineddata" to MAL_SHA256),
+            "ben" to ("assets/models/tessdata/ben.traineddata" to BEN_SHA256)
         )
 
         fun rgbToBitmap(rgb: ByteArray, width: Int, height: Int): Bitmap {
@@ -230,14 +245,13 @@ class IndicOcrPlugin(
         when (call.method) {
             "checkInstalledPacks" -> {
                 runOnWorker(result) {
-                    val tessDir = File(context.filesDir, "tesseract/tessdata")
                     mapOf(
-                        "devanagari" to true, // bundled ML Kit + hin.traineddata
+                        "devanagari" to true, // bundled ML Kit + hin/mar.traineddata
                         "kannada" to true, // bundled kan.traineddata
-                        "tamil" to File(tessDir, "tam.traineddata").exists(),
-                        "telugu" to File(tessDir, "tel.traineddata").exists(),
-                        "malayalam" to File(tessDir, "mal.traineddata").exists(),
-                        "bengali" to File(tessDir, "ben.traineddata").exists()
+                        "tamil" to true, // bundled tam.traineddata
+                        "telugu" to true, // bundled tel.traineddata
+                        "malayalam" to true, // bundled mal.traineddata
+                        "bengali" to true // bundled ben.traineddata
                     )
                 }
             }

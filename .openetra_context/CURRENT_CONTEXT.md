@@ -1,18 +1,21 @@
 # Openetra Local Engineering Context
 
-**Current Version:** `0.9.0-phase5-7-verified`  
-**Phase:** Phase 5–6+7 Emulator Verification — Native Indic OCR/VAD, Barcode, Embeddings, Mirage `form`, LiteRT `1.4.2`, SQLite v2 Migration & Expanded Test Suite  
+**Current Version:** `1.0.0-release-candidate`  
+**Phase:** Release Candidate (`v1.0.0-release-candidate`) — All-8-Language Offline Indian OCR, Live LiteRT XNNPACK Verification, Coordinator & UI Hardening, Zero-Network R8 Release APK  
 **Last Updated:** 2026-11-23  
 **Git Branch:** `main`  
 
-## Verified Build & Runtime Baseline (`v0.9.0-phase5-7-verified`)
-- **Host Static Analysis & Test Suite:** `flutter analyze` (`No issues found!`); `flutter test -r expanded` (`36` passing test cases across all baseline + 4 Phase 5/6 suites: `openetra_localizer_test.dart`, `shopping_and_migration_test.dart`, `embeddings_and_currency_fusion_test.dart`, `native_indic_providers_test.dart`).
-- **APK Packaging & Offline Manifest:** `flutter build apk --debug --target-platform android-arm64` bundles `libopenetra_mirage.so`, `libsherpa-onnx-jni.so`, `libtensorflowlite_jni.so` (LiteRT `1.4.2`), `libtesseract.so`, `libleptonica.so`, `libmlkit_google_ocr_pipeline.so`, `libbarhopper_v3.so`, `mirage.cact`, `hin.traineddata`, `kan.traineddata`, and `silero_vad.int8.onnx` across `arm64-v8a` & `armeabi-v7a`. Production `android/app/src/main/AndroidManifest.xml` omits `INTERNET`.
-- **Android 15 `Medium_Phone_API_35` (`arm64-v8a`) Live Instrumentation Verification:**
-  - `MirageNativeInstrumentedTest` (`1.302 s`): `cactus_load` `85.43 ms`, COCO `231049` `285.59 ms` / `291.42 ms`, COCO `139` `298.76 ms`.
-  - `IndicAndSpecialistInstrumentedTest` (`0.822 s`): ML Kit Devanagari (`208 ms`, `"नमस्ते निकास 500"`), Tesseract `hin` (`27 ms`, `"नमस्ते निकास 500"`), Tesseract `kan` (`14 ms`, `"ಬೆಂಗಳೂರು 500"`), `sherpa-onnx 2.0.3` Silero VAD (`14 ms`, `detected=true`, `segments=1`), ML Kit Barcode `17.3.0` (`42 ms`, Code-128 `"8901058851234"`), Mirage 3-choice `form` (`120.65 ms`, `stop=0.7898`), `computeCropDescriptor96` (`18.53 ms`, L2 norm `1.0000`, selfCos `1.0000`, diffCos `0.8886`).
+## Verified Build, Security & Runtime Baseline (`v1.0.0-release-candidate`)
+- **Host Analysis & Test Suite:** `flutter analyze` (`No issues found!`); `flutter test -r expanded` (`40/40` passing test cases across all baseline suites + `v1_release_readiness_test.dart`).
+- **Production Release APK (`app-release.apk`, `142,993,414 B`, `pubspec` `1.0.0+2`):**
+  - Built with R8 minification & resource shrinking (`minifyEnabled = true`, `shrinkResources = true`, `proguard-rules.pro`) and `src/release/AndroidManifest.xml` stripping `INTERNET` and `ACCESS_NETWORK_STATE` via `tools:node="remove"`.
+  - `aapt2 dump permissions` verified zero `INTERNET` and zero `ACCESS_NETWORK_STATE` (only `CAMERA`, `RECORD_AUDIO`, `VIBRATE`, `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`).
+  - Cold-launched `com.openetra.app/.MainActivity` on `Medium_Phone_API_35` in `2560 ms`; PID `8429` verified running after 3s with zero Openetra/Flutter/R8/JNI fatal exceptions.
+- **Android 15 ARM64 Instrumentation (`Medium_Phone_API_35`, `arm64-v8a`):**
+  - `MirageNativeInstrumentedTest` (`1.305 s`): `cactus_load` `107.16 ms`, COCO `231049` `363.73 ms` / `230.52 ms`, COCO `139` `303.86 ms`.
+  - `IndicAndSpecialistInstrumentedTest` (`1.75 s`): ML Kit Devanagari (`520 ms`, `"नमस्ते निकास 500"`), Tesseract `hin` (`32 ms`), `mar` (`16 ms`), `kan` (`17 ms`), `tam` (`14 ms`), `tel` (`18 ms`), `mal` (`10 ms`), `ben` (`11 ms`) — all 7 recovered exact Unicode text — `sherpa-onnx` Silero VAD (`19 ms`, `detected=true`, `segments=1`), ML Kit Barcode `17.3.0` (`53 ms`, `"8901058851234"`), Mirage 3-choice `form` (`107.71 ms`, `stop=0.7898`), `computeCropDescriptor96` (`21.03 ms`, norm `1.0000`, selfCos `1.0000`, diffCos `0.8886`), and live LiteRT `1.4.2` XNNPACK `Interpreter` (`1.02 ms`, 192 float32 elements, `1.5 -> 4.5`).
 
-## Remaining Future Work (Post-`v0.9.0`)
-- Train/bundle `.tflite` Indian banknote classifier weights for `SpecialistVisionPlugin` LiteRT `1.4.2` slot and evaluate optional monocular depth `.tflite`/ORT pack.
-- Bundle or provision regional `IndicConformer` (`sherpa-onnx`) ASR weights and additional `tessdata` (`tam`/`tel`/`mal`/`ben`) packs via Model Manager.
-- Execute physical Android phone (entry/mid/flagship) power/thermal benchmarks and accessibility trials with blind participants (Phase 7–8).
+## Pending Beyond Emulator Verification
+- Train/bundle `.tflite` Indian banknote classifier weights and evaluate optional monocular depth `.tflite` weights for active `SpecialistVisionPlugin` LiteRT `1.4.2` slots.
+- Provision downloadable `IndicConformer` (`sherpa-onnx`) ASR weights via Model Manager / local storage.
+- Execute physical Android phone (entry/mid/flagship) battery/thermal benchmarks and blind-user usability trials.

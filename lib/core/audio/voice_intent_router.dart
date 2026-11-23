@@ -101,6 +101,34 @@ class VoiceIntentRouter {
       );
     }
 
+    if (_matchesAny(normalized, const [
+      'what is on the left',
+      'what is on my left',
+      'on the left',
+      'on the right',
+      'in front',
+      'any chairs',
+      'what changed',
+      'any text',
+      'what text',
+      'left side',
+      'right side',
+      'doorway',
+      'exit',
+      'stairs',
+      'landmark',
+      'बायें',
+      'दायें',
+      'ಎಡ',
+      'ಬಲ',
+    ])) {
+      return VoiceIntent(
+        type: VoiceIntentType.followUpQuery,
+        rawTranscript: transcript,
+        targetArgument: normalized,
+      );
+    }
+
     final findObjectTarget = _extractFindTarget(normalized);
     if (findObjectTarget != null) {
       return VoiceIntent(
@@ -130,6 +158,9 @@ class VoiceIntentRouter {
       'english',
       'tamil',
       'telugu',
+      'malayalam',
+      'marathi',
+      'bengali',
       'language',
       'भाषा',
       'bhasha',
@@ -151,30 +182,6 @@ class VoiceIntentRouter {
       return VoiceIntent(
         type: VoiceIntentType.openSettings,
         rawTranscript: transcript,
-      );
-    }
-
-    if (_matchesAny(normalized, const [
-      'what is on the left',
-      'what is on my left',
-      'on the left',
-      'on the right',
-      'in front',
-      'any chairs',
-      'what changed',
-      'any text',
-      'what text',
-      'left side',
-      'right side',
-      'बायें',
-      'दायें',
-      'ಎಡ',
-      'ಬಲ',
-    ])) {
-      return VoiceIntent(
-        type: VoiceIntentType.followUpQuery,
-        rawTranscript: transcript,
-        targetArgument: normalized,
       );
     }
 

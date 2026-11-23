@@ -150,3 +150,44 @@ class NativeCurrencyClassifierProvider implements CurrencyClassifierProvider {
     }
   }
 }
+
+/// Optional LiteRT 1.4.2 relative depth provider (strictly uncalibrated
+/// normalized center proximity in [0.0, 1.0], never metric distance).
+class NativeDepthProvider implements DepthProvider {
+  NativeDepthProvider([MethodChannel? channel])
+      : _channel = channel ?? const MethodChannel('com.openetra.app/specialist');
+
+  final MethodChannel _channel;
+
+  @override
+  String get modelId => 'openetra-litert-depth-slot';
+
+  @override
+  Future<bool> get isMetricCalibrated async => false;
+
+  @override
+  Future<bool> get isAvailable async {
+    try {
+      final status = await _channel.invokeMapMethod<String, dynamic>('status');
+      return (status?['depthModelLoaded'] as bool?) ?? false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  @override
+  Future<double?> estimateNormalizedCenterDepth(CapturedFrame frame) async {
+    final rgb = frame.rgbBytes;
+    if (rgb == null || frame.width <= 0 || frame.height <= 0) return null;
+    try {
+      final res = await _channel.invokeMapMethod<String, dynamic>(
+        'estimateCenterDepthRgb',
+        {'rgbBytes': rgb, 'width': frame.width, 'height': frame.height},
+      );
+      if (res == null || (res['available'] as bool?) != true) return null;
+      return (res['normalizedCenterDepth'] as num?)?.toDouble().clamp(0.0, 1.0);
+    } on MissingPluginException {
+      return null;
+    }
+  }
+}

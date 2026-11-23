@@ -13,6 +13,7 @@ import '../core/safety/bloc/safety_bloc.dart';
 import '../core/storage/openetra_database.dart';
 import '../features/currency/domain/currency_recognition_service.dart';
 import '../features/hazard_detection/bloc/hazard_detection_bloc.dart';
+import '../features/navigation/domain/navigation_cue_service.dart';
 import '../features/object_memory/bloc/object_memory_bloc.dart';
 import '../features/scene_understanding/bloc/scene_understanding_bloc.dart';
 import '../features/settings/bloc/settings_bloc.dart';
@@ -71,6 +72,66 @@ class OpenetraCoordinator {
   bool _hazardLoopActive = false;
 
   bool get isHazardLoopActive => _hazardLoopActive;
+
+  /// Stops TTS playback, continuous hazard loop, and camera streaming together.
+  Future<void> stopAll() async {
+    _hazardLoopActive = false;
+    hazardBloc.add(const ResetHazardTracker());
+    audioBloc.add(const InterruptSpeechRequested());
+    await cameraSource.stop();
+  }
+
+  /// Captures a frame, extracts a matching Mirage crop (or center crop), and
+  /// registers the personal item with its 96-dim visual signature offline.
+  Future<void> registerPersonalObjectWithCamera(
+    String itemName, {
+    CapturedFrame? overrideFrame,
+  }) async {
+    final trimmed = itemName.trim();
+    if (trimmed.isEmpty) return;
+    try {
+      final frame = await _captureOrReuseFrame(overrideFrame: overrideFrame);
+      BoundingBox crop = const BoundingBox(x1: 200, y1: 200, x2: 800, y2: 800);
+      try {
+        final obs = await orchestrator.runVisualPerception(
+          frame,
+          task: ModelTask.scenePerception,
+          overrideProfile: MirageQueryProfile.objectSearch,
+          keywords: [trimmed],
+        );
+        final targetLower = trimmed.toLowerCase();
+        for (final obj in obs.objects) {
+          final n = obj.name.toLowerCase();
+          if (n == targetLower ||
+              n.contains(targetLower) ||
+              targetLower.contains(n)) {
+            crop = obj.boundingBox;
+            break;
+          }
+        }
+      } catch (_) {
+        // Falls back cleanly to center crop if Mirage is unavailable.
+      }
+      objectMemoryBloc.add(
+        RegisterPersonalObject(
+          name: trimmed,
+          sampleFrame: frame,
+          sampleCrop: crop,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final msg = objectMemoryBloc.state.lastSearchResult ??
+          'Saved $trimmed to personal object memory.';
+      await _emitSpoken(spokenText: msg, displaySummary: msg);
+    } catch (e) {
+      objectMemoryBloc.add(RegisterPersonalObject(name: trimmed));
+      await _emitSpoken(
+        spokenText: 'Saved $trimmed by name without visual signature ($e).',
+        displaySummary: 'Saved $trimmed',
+        haptic: HapticPattern.caution,
+      );
+    }
+  }
 
   void attachSafetyFilter(
     AssistantResponse Function(AssistantResponse) filter,
@@ -486,8 +547,7 @@ class OpenetraCoordinator {
 
     switch (intent.type) {
       case VoiceIntentType.stopSpeaking:
-        _hazardLoopActive = false;
-        audioBloc.add(const InterruptSpeechRequested());
+        await stopAll();
         return;
       case VoiceIntentType.repeatLast:
         audioBloc.add(const RepeatSpeechRequested());
@@ -508,6 +568,18 @@ class OpenetraCoordinator {
         await runFindObject(intent.targetArgument ?? 'wallet');
         return;
       case VoiceIntentType.followUpQuery:
+        final lowerQ = intent.rawTranscript.toLowerCase();
+        final latestGraph = sceneBloc.state.latestDescription?.sceneGraph;
+        if (latestGraph != null &&
+            (lowerQ.contains('door') ||
+                lowerQ.contains('exit') ||
+                lowerQ.contains('stairs') ||
+                lowerQ.contains('landmark'))) {
+          final navCue =
+              const NavigationCueService().summarizeOrientationCues(latestGraph);
+          await _emitSpoken(spokenText: navCue, displaySummary: navCue);
+          return;
+        }
         sceneBloc.add(AnswerSceneFollowUp(intent.rawTranscript));
         await Future<void>.delayed(Duration.zero);
         final answer = sceneBloc.state.followUpAnswer ??
@@ -529,9 +601,24 @@ class OpenetraCoordinator {
         return;
       case VoiceIntentType.switchLanguage:
         final arg = intent.targetArgument ?? '';
-        final nextLocale = arg.contains('hindi')
-            ? 'hi-IN'
-            : (arg.contains('kannada') ? 'kn-IN' : 'en-IN');
+        final String nextLocale;
+        if (arg.contains('hindi')) {
+          nextLocale = 'hi-IN';
+        } else if (arg.contains('kannada')) {
+          nextLocale = 'kn-IN';
+        } else if (arg.contains('tamil')) {
+          nextLocale = 'ta-IN';
+        } else if (arg.contains('telugu')) {
+          nextLocale = 'te-IN';
+        } else if (arg.contains('malayalam')) {
+          nextLocale = 'ml-IN';
+        } else if (arg.contains('marathi')) {
+          nextLocale = 'mr-IN';
+        } else if (arg.contains('bengali')) {
+          nextLocale = 'bn-IN';
+        } else {
+          nextLocale = 'en-IN';
+        }
         settingsBloc.add(UpdatePreferredLanguage(nextLocale));
         audioBloc.add(UpdateSpeechConfig(locale: nextLocale));
         await _emitSpoken(

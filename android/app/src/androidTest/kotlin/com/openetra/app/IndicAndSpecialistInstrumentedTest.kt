@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.os.SystemClock
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -19,10 +20,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.tensorflow.lite.Interpreter
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -123,10 +128,10 @@ class IndicAndSpecialistInstrumentedTest {
     @Test
     fun verifyIndicOcrSileroVadBarcodeMirageFormAndEmbeddings() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val testContext = InstrumentationRegistry.getInstrumentation().context
 
-        // 1 & 2. Hindi ML Kit + Tesseract hin, plus Kannada Tesseract kan.
+        // 1 & 2. All 7 bundled Indic Tesseract models + ML Kit Devanagari OCR.
         val hiBmp = renderHighContrastTextBitmap("नमस्ते निकास 500")
-        val knBmp = renderHighContrastTextBitmap("ಬೆಂಗಳೂರು 500")
         try {
             val mlKitHi = IndicOcrPlugin.recognizeDevanagariMlKitBitmap(hiBmp)
             val mlMs = mlKitHi["inferenceMs"] as Int
@@ -136,21 +141,33 @@ class IndicAndSpecialistInstrumentedTest {
                 "Expected non-empty Devanagari/500 ML Kit OCR, got '$mlText'",
                 mlText.isNotEmpty() && (mlText.any { it in '\u0900'..'\u097F' } || mlText.contains("500"))
             )
-
-            val tessHi = IndicOcrPlugin.recognizeTesseractBitmap(context, hiBmp, "hin")
-            val tessHiMs = tessHi["inferenceMs"] as Int
-            val tessHiText = (tessHi["fullText"] as String).trim()
-            Log.i(TAG, "TESS_HIN ms=%d text=%s".format(tessHiMs, tessHiText.replace('\n', ' ')))
-            assertTrue("Expected non-empty Tesseract hin OCR", tessHiText.isNotEmpty())
-
-            val tessKn = IndicOcrPlugin.recognizeTesseractBitmap(context, knBmp, "kan")
-            val tessKnMs = tessKn["inferenceMs"] as Int
-            val tessKnText = (tessKn["fullText"] as String).trim()
-            Log.i(TAG, "TESS_KAN ms=%d text=%s".format(tessKnMs, tessKnText.replace('\n', ' ')))
-            assertTrue("Expected non-empty Tesseract kan OCR", tessKnText.isNotEmpty())
         } finally {
             hiBmp.recycle()
-            knBmp.recycle()
+        }
+
+        val indicCases = listOf(
+            Triple("hin", "नमस्ते निकास 500", '\u0900'..'\u097F'),
+            Triple("mar", "महाराष्ट्र 500", '\u0900'..'\u097F'),
+            Triple("kan", "ಬೆಂಗಳೂರು 500", '\u0C80'..'\u0CFF'),
+            Triple("tam", "சென்னை 500", '\u0B80'..'\u0BFF'),
+            Triple("tel", "హైదరాబాద్ 500", '\u0C00'..'\u0C7F'),
+            Triple("mal", "കൊച്ചി 500", '\u0D00'..'\u0D7F'),
+            Triple("ben", "কলকাতা 500", '\u0980'..'\u09FF')
+        )
+        for ((langCode, sampleText, blockRange) in indicCases) {
+            val bmp = renderHighContrastTextBitmap(sampleText)
+            try {
+                val res = IndicOcrPlugin.recognizeTesseractBitmap(context, bmp, langCode)
+                val ms = res["inferenceMs"] as Int
+                val text = (res["fullText"] as String).trim()
+                Log.i(TAG, "TESS_%s ms=%d text=%s".format(langCode.uppercase(), ms, text.replace('\n', ' ')))
+                assertTrue(
+                    "Expected non-empty Tesseract $langCode OCR containing native script or 500, got '$text'",
+                    text.isNotEmpty() && (text.any { it in blockRange } || text.contains("500"))
+                )
+            } finally {
+                bmp.recycle()
+            }
         }
 
         // 3. Silero VAD (sherpa-onnx 2.0.3 native runtime).
@@ -227,5 +244,41 @@ class IndicAndSpecialistInstrumentedTest {
         assertTrue("Expected unit L2 norm in [0.99, 1.01], got $norm", norm in 0.99f..1.01f)
         assertTrue("Expected self cosine >= 0.999, got $selfCos", selfCos >= 0.999f)
         assertTrue("Expected distinct crop cosine < 0.99, got $diffCos", diffCos < 0.99f)
+
+        // 6. Live LiteRT 1.4.2 Interpreter + XNNPACK verification on test-only add smoke model.
+        val tfliteFile = File(context.cacheDir, "litert_add_smoke.tflite")
+        testContext.assets.open("litert_add_smoke.tflite").use { input ->
+            FileOutputStream(tfliteFile).use { output -> input.copyTo(output) }
+        }
+        val opts = Interpreter.Options().setNumThreads(2).setUseXNNPACK(true)
+        Interpreter(tfliteFile, opts).use { interp ->
+            val inTensor = interp.getInputTensor(0)
+            val outTensor = interp.getOutputTensor(0)
+            val elemCount = inTensor.numElements()
+            assertEquals(elemCount, outTensor.numElements())
+
+            val inBuf = ByteBuffer.allocateDirect(elemCount * 4).order(ByteOrder.nativeOrder())
+            for (i in 0 until elemCount) {
+                inBuf.putFloat(1.5f)
+            }
+            inBuf.rewind()
+            val outBuf = ByteBuffer.allocateDirect(elemCount * 4).order(ByteOrder.nativeOrder())
+
+            val tLite0 = SystemClock.elapsedRealtimeNanos()
+            interp.run(inBuf, outBuf)
+            val liteMs = (SystemClock.elapsedRealtimeNanos() - tLite0) / 1_000_000.0
+
+            outBuf.rewind()
+            val fb = outBuf.asFloatBuffer()
+            // tensorflow/lite/testdata/add.bin computes (x + x) + x = 3 * x.
+            for (i in 0 until elemCount) {
+                val actual = fb.get(i)
+                assertTrue(
+                    "Expected LiteRT add(1.5*3)=4.5 at idx=$i, got $actual",
+                    abs(actual - 4.5f) < 1e-4f
+                )
+            }
+            Log.i(TAG, "LITERT_XNNPACK ms=%.2f elems=%d sampleOut=%.1f".format(liteMs, elemCount, fb.get(0)))
+        }
     }
 }

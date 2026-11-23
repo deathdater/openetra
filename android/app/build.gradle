@@ -78,6 +78,9 @@ android {
         release {
             // Signing with the debug keys for local testing builds; replace for store release.
             signingConfig = signingConfigs.debug
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }

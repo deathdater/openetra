@@ -178,6 +178,7 @@ class SpecialistVisionPlugin(
     }
     private val mainHandler = Handler(Looper.getMainLooper())
     private var currencyInterpreter: Interpreter? = null
+    private var depthInterpreter: Interpreter? = null
 
     init {
         channel.setMethodCallHandler(this)
@@ -194,7 +195,8 @@ class SpecialistVisionPlugin(
                         "barcodeAvailable" to true,
                         "embeddingAvailable" to true,
                         "litertAvailable" to true,
-                        "currencyModelLoaded" to (currencyInterpreter != null)
+                        "currencyModelLoaded" to (currencyInterpreter != null),
+                        "depthModelLoaded" to (depthInterpreter != null)
                     )
                 )
             }
@@ -283,6 +285,47 @@ class SpecialistVisionPlugin(
                 }
             }
 
+            "loadDepthModel" -> {
+                val path = call.argument<String>("path")
+                val expectedSha = call.argument<String>("expectedSha256")
+                if (path.isNullOrBlank() || expectedSha.isNullOrBlank()) {
+                    result.error("INVALID_ARGS", "path and expectedSha256 required", null)
+                    return
+                }
+                runOnWorker(result) {
+                    val file = File(path)
+                    if (!file.exists()) {
+                        throw IllegalStateException("Depth LiteRT model missing at $path")
+                    }
+                    val actual = sha256(file)
+                    if (actual != expectedSha.trim().lowercase()) {
+                        throw SecurityException("Depth LiteRT model checksum mismatch")
+                    }
+                    depthInterpreter?.close()
+                    val opts = Interpreter.Options().setNumThreads(2).setUseXNNPACK(true)
+                    depthInterpreter = Interpreter(file, opts)
+                    mapOf("loaded" to true)
+                }
+            }
+
+            "estimateCenterDepthRgb" -> {
+                val rgb = call.argument<ByteArray>("rgbBytes")
+                val width = call.argument<Int>("width") ?: 0
+                val height = call.argument<Int>("height") ?: 0
+                if (rgb == null || width <= 0 || height <= 0) {
+                    result.error("INVALID_ARGS", "rgbBytes, width, and height required", null)
+                    return
+                }
+                val interp = depthInterpreter
+                if (interp == null) {
+                    result.success(mapOf("available" to false, "isMetricCalibrated" to false))
+                    return
+                }
+                runOnWorker(result) {
+                    runDepthInterpreter(interp, rgb, width, height)
+                }
+            }
+
             else -> result.notImplemented()
         }
     }
@@ -343,6 +386,102 @@ class SpecialistVisionPlugin(
         )
     }
 
+    private fun runDepthInterpreter(
+        interp: Interpreter,
+        rgb: ByteArray,
+        width: Int,
+        height: Int
+    ): Map<String, Any> {
+        val inTensor = interp.getInputTensor(0)
+        val inShape = inTensor.shape()
+        val inH = if (inShape.size >= 3 && inShape[1] > 0) inShape[1] else 256
+        val inW = if (inShape.size >= 3 && inShape[2] > 0) inShape[2] else 256
+        val bmp = IndicOcrPlugin.rgbToBitmap(rgb, width, height)
+        val scaled = Bitmap.createScaledBitmap(bmp, inW, inH, true)
+        if (scaled != bmp) bmp.recycle()
+
+        val pixels = IntArray(inW * inH)
+        scaled.getPixels(pixels, 0, inW, 0, 0, inW, inH)
+        scaled.recycle()
+
+        val isUint8 = inTensor.dataType() == DataType.UINT8
+        val inputBuf = ByteBuffer.allocateDirect(
+            if (isUint8) inW * inH * 3 else inW * inH * 3 * 4
+        ).order(ByteOrder.nativeOrder())
+
+        for (px in pixels) {
+            val r = (px shr 16) and 0xFF
+            val g = (px shr 8) and 0xFF
+            val b = px and 0xFF
+            if (isUint8) {
+                inputBuf.put(r.toByte())
+                inputBuf.put(g.toByte())
+                inputBuf.put(b.toByte())
+            } else {
+                inputBuf.putFloat(r / 255.0f)
+                inputBuf.putFloat(g / 255.0f)
+                inputBuf.putFloat(b / 255.0f)
+            }
+        }
+        inputBuf.rewind()
+
+        val outTensor = interp.getOutputTensor(0)
+        val outShape = outTensor.shape()
+        val outCount = max(1, outTensor.numElements())
+        val outByteBuf = ByteBuffer.allocateDirect(outCount * 4).order(ByteOrder.nativeOrder())
+        val t0 = SystemClock.elapsedRealtime()
+        interp.run(inputBuf, outByteBuf)
+        val ms = (SystemClock.elapsedRealtime() - t0).toInt()
+
+        outByteBuf.rewind()
+        val fb = outByteBuf.asFloatBuffer()
+        val raw = FloatArray(outCount)
+        fb.get(raw)
+
+        var minVal = Float.POSITIVE_INFINITY
+        var maxVal = Float.NEGATIVE_INFINITY
+        for (v in raw) {
+            if (v.isFinite()) {
+                if (v < minVal) minVal = v
+                if (v > maxVal) maxVal = v
+            }
+        }
+        val span = if (maxVal > minVal + 1e-6f) maxVal - minVal else 1.0f
+
+        var sumNorm = 0.0
+        var count = 0
+        if (outShape.size >= 3 && outShape[1] >= 3 && outShape[2] >= 3) {
+            val outH = outShape[1]
+            val outW = outShape[2]
+            val channels = if (outShape.size >= 4) max(1, outShape[3]) else 1
+            for (y in (outH / 3) until ((2 * outH) / 3)) {
+                for (x in (outW / 3) until ((2 * outW) / 3)) {
+                    val idx = (y * outW + x) * channels
+                    val v = raw[idx]
+                    if (v.isFinite()) {
+                        sumNorm += ((v - minVal) / span).coerceIn(0.0f, 1.0f).toDouble()
+                        count++
+                    }
+                }
+            }
+        } else {
+            for (v in raw) {
+                if (v.isFinite()) {
+                    sumNorm += ((v - minVal) / span).coerceIn(0.0f, 1.0f).toDouble()
+                    count++
+                }
+            }
+        }
+
+        val centerNorm = if (count > 0) (sumNorm / count).coerceIn(0.0, 1.0) else 0.5
+        return mapOf(
+            "available" to true,
+            "normalizedCenterDepth" to centerNorm,
+            "isMetricCalibrated" to false,
+            "inferenceMs" to ms
+        )
+    }
+
     private fun runOnWorker(
         result: io.flutter.plugin.common.MethodChannel.Result,
         block: () -> Any?
@@ -364,6 +503,10 @@ class SpecialistVisionPlugin(
         worker.execute {
             try {
                 currencyInterpreter?.close()
+            } catch (_: Throwable) {
+            }
+            try {
+                depthInterpreter?.close()
             } catch (_: Throwable) {
             }
         }

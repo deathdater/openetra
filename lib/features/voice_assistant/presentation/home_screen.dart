@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../app/openetra_coordinator.dart';
 import '../../../app/theme.dart';
-import '../../../core/audio/bloc/audio_bloc.dart';
 import '../../../core/resource_management/bloc/device_resource_bloc.dart';
 import '../../../core/safety/bloc/safety_bloc.dart';
 import '../../../shared/widgets/accessible_action_tile.dart';
@@ -119,9 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               accentBorderColor: OpenetraTheme.hazardCritical,
                               minHeight: 68,
                               onPressed: () {
-                                context
-                                    .read<AudioBloc>()
-                                    .add(const InterruptSpeechRequested());
+                                widget.coordinator.stopAll();
                               },
                             ),
                             const SizedBox(height: 14),
@@ -181,9 +178,33 @@ class _HomeScreenState extends State<HomeScreen> {
                                     builder: (_) => ObjectMemoryScreen(
                                       onFindObjectRequested: (item) =>
                                           widget.coordinator.runFindObject(item),
+                                      onCaptureAndSaveRequested: (name) => widget
+                                          .coordinator
+                                          .registerPersonalObjectWithCamera(name),
                                     ),
                                   ),
                                 );
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            AccessibleActionTile(
+                              title: widget.coordinator.isHazardLoopActive
+                                  ? 'Continuous Hazard Mode (Active)'
+                                  : 'Continuous Hazard Mode',
+                              subtitle: widget.coordinator.isHazardLoopActive
+                                  ? 'Scanning periodically; tap to pause alerts'
+                                  : 'Periodic obstacle & surface scan obeying power budget',
+                              semanticHint:
+                                  'Double tap to toggle continuous hazard awareness',
+                              icon: Icons.radar,
+                              accentBorderColor: widget.coordinator.isHazardLoopActive
+                                  ? OpenetraTheme.hazardCritical
+                                  : OpenetraTheme.hazardWarning,
+                              filledAccent: widget.coordinator.isHazardLoopActive,
+                              onPressed: () async {
+                                await widget.coordinator
+                                    .toggleContinuousHazardAwareness();
+                                if (mounted) setState(() {});
                               },
                             ),
                             const SizedBox(height: 12),

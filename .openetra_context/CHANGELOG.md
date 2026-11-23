@@ -1,5 +1,12 @@
 # Openetra Context Changelog
 
+## [1.0.0-release-candidate] - 2026-11-23
+### Added & Verified
+- Bundled & SHA-256-verified all 5 remaining Apache-2.0 `tesseract-ocr/tessdata_fast` models (`mar`, `tam`, `tel`, `mal`, `ben`) alongside `hin` & `kan`, covering all 8 target Indian languages (`en-IN` + 7 Indic scripts); updated `pubspec.yaml` (`1.0.0+2`), `IndicOcrPlugin.kt`, `NativeIndicOcrProvider` (`mr-IN -> mar`), and `AIModelRegistry`.
+- Added uncalibrated LiteRT `1.4.2` relative depth slot (`loadDepthModel` / `estimateCenterDepthRgb` in `SpecialistVisionPlugin.kt` + `NativeDepthProvider`), `OpenetraCoordinator.stopAll()` and `registerPersonalObjectWithCamera`, 8-locale voice routing & doorway cue follow-ups, `HomeScreen` `Continuous Hazard Mode` toggle, `ObjectMemoryScreen` camera capture button, and two-step `SettingsScreen` wipe confirmation dialog.
+- Configured `android/app/src/release/AndroidManifest.xml` (`tools:node="remove"` for `INTERNET` and `ACCESS_NETWORK_STATE`), `android/app/proguard-rules.pro`, and `minifyEnabled = true` / `shrinkResources = true` in `android/app/build.gradle`.
+- Verified `app-release.apk` (`142,993,414 B`) declares zero network permissions (`aapt2 dump permissions`) and cold-launches on `Medium_Phone_API_35` in `2560 ms` (`PID 8429`, zero fatal errors); passed 40/40 host tests (`v1_release_readiness_test.dart`) and verified character-exact output across all 7 bundled Indic Tesseract packs plus live LiteRT `1.4.2` XNNPACK (`1.02 ms`, `litert_add_smoke.tflite`) on Android 15 ARM64 emulator.
+
 ## [0.9.0-phase5-7-verified] - 2026-11-23
 ### Added & Verified
 - Pinned `com.google.ai.edge.litert:litert:1.4.2` (16 KB aligned, resolving `litert-api:2.4.0` Kotlin metadata `2.4.0` conflict against Kotlin `2.2.20` + AGP `8.5.2`).
