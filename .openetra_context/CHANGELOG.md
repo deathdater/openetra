@@ -1,5 +1,11 @@
 # Openetra Context Changelog
 
+## [0.5.0-phase4] - 2026-11-23
+### Added
+- Implemented `HazardTaxonomy`, `IoUTracker`, and `HazardIntelligenceEngine` with 5-factor confidence separation and cooldown deduplication.
+- Implemented `SafetySpeechGuard` and `OpenetraSafetyPolicy` blocking unsafe crossing, clear-path, uncalibrated distance, and counterfeit claims.
+- Implemented `ScriptDetector`, `ReadingOrderReconstructor`, and `OcrRouter` wired end-to-end across Workflows A–E.
+
 ## [0.4.0-phase3] - 2026-11-23
 ### Added
 - Implemented `SceneUnderstandingEngine` with entity deduplication, deterministic relative zones, relation confidence filtering, temporal scene diff, and accessibility speech composition.

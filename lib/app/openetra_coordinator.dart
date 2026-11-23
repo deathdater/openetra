@@ -288,7 +288,11 @@ class OpenetraCoordinator {
       );
       _lastObservation = obs;
       smartReaderBloc.add(
-        ReadObservedText(observation: obs, targetLocale: _activeLocale),
+        ReadObservedText(
+          observation: obs,
+          targetLocale: _activeLocale,
+          frame: frame,
+        ),
       );
       await Future<void>.delayed(Duration.zero);
 

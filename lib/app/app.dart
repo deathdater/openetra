@@ -12,8 +12,10 @@ import '../core/inference/model_provider.dart';
 import '../core/resource_management/bloc/device_resource_bloc.dart';
 import '../core/resource_management/device_resource_manager.dart';
 import '../core/safety/bloc/safety_bloc.dart';
+import '../core/safety/openetra_safety_policy.dart';
 import '../core/storage/openetra_database.dart';
 import '../features/hazard_detection/bloc/hazard_detection_bloc.dart';
+import '../features/hazard_detection/domain/hazard_intelligence_engine.dart';
 import '../features/model_manager/bloc/model_manager_bloc.dart';
 import '../features/object_memory/bloc/object_memory_bloc.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
@@ -22,6 +24,7 @@ import '../features/scene_understanding/domain/contextual_query_resolver.dart';
 import '../features/scene_understanding/domain/scene_understanding_engine.dart';
 import '../features/settings/bloc/settings_bloc.dart';
 import '../features/smart_reader/bloc/smart_reader_bloc.dart';
+import '../features/smart_reader/domain/ocr_router.dart';
 import '../features/vision_explorer/bloc/vision_bloc.dart';
 import '../features/voice_assistant/bloc/voice_assistant_bloc.dart';
 import '../features/voice_assistant/presentation/home_screen.dart';
@@ -119,8 +122,24 @@ class OpenetraDependencies {
       followUpResolver: (query, graph) =>
           queryResolver.answerFollowUp(query, fallbackGraph: graph),
     );
-    final hazardBloc = HazardDetectionBloc();
-    final readerBloc = SmartReaderBloc();
+    final hazardEngine = HazardIntelligenceEngine();
+    final hazardBloc = HazardDetectionBloc(
+      evaluator: (obs) => hazardEngine.evaluate(
+        obs,
+        deviceResourceDegraded: resMgr.currentState.isDegradedCapability,
+        deviceDegradationReason: resMgr.currentState.degradationMessage,
+      ),
+      onReset: hazardEngine.reset,
+    );
+    final ocrRouter = OcrRouter(orchestrator: orchestrator);
+    final readerBloc = SmartReaderBloc(
+      reader: (obs, locale, frame) => ocrRouter.processObservation(
+        mirageObservation: obs,
+        targetLocale: locale,
+        rawFrame: frame,
+      ),
+    );
+    const safetyPolicy = OpenetraSafetyPolicy();
     final objectBloc = ObjectMemoryBloc(database: database);
     final modelBloc = ModelManagerBloc(
       registry: registry,
@@ -142,6 +161,7 @@ class OpenetraDependencies {
       safetyBloc: safetyBloc,
       resourceBloc: resourceBloc,
       settingsBloc: settingsBloc,
+      safetyOutputFilter: (r) => safetyPolicy.enforceResponse(r),
     );
 
     settingsBloc.add(const LoadSettings());

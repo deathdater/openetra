@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/domain/entities/entities.dart';
+import '../../../core/inference/model_provider.dart';
 
 abstract class SmartReaderEvent extends Equatable {
   const SmartReaderEvent();
@@ -13,13 +14,15 @@ class ReadObservedText extends SmartReaderEvent {
   const ReadObservedText({
     required this.observation,
     required this.targetLocale,
+    this.frame,
   });
 
   final VisionObservation observation;
   final String targetLocale;
+  final CapturedFrame? frame;
 
   @override
-  List<Object?> get props => [observation, targetLocale];
+  List<Object?> get props => [observation, targetLocale, frame];
 }
 
 class SmartReaderState extends Equatable {
@@ -38,16 +41,28 @@ class SmartReaderState extends Equatable {
 /// Phase 1 baseline BLoC; OcrRouter & ReadingOrderReconstructor attach in Phase 4.
 class SmartReaderBloc extends Bloc<SmartReaderEvent, SmartReaderState> {
   SmartReaderBloc({
-    Future<TextRecognitionResult> Function(VisionObservation, String)? reader,
+    Future<TextRecognitionResult> Function(
+      VisionObservation,
+      String,
+      CapturedFrame?,
+    )? reader,
   })  : _reader = reader,
         super(const SmartReaderState()) {
     on<ReadObservedText>(_onRead);
   }
 
-  Future<TextRecognitionResult> Function(VisionObservation, String)? _reader;
+  Future<TextRecognitionResult> Function(
+    VisionObservation,
+    String,
+    CapturedFrame?,
+  )? _reader;
 
   void attachRouter(
-    Future<TextRecognitionResult> Function(VisionObservation, String) reader,
+    Future<TextRecognitionResult> Function(
+      VisionObservation,
+      String,
+      CapturedFrame?,
+    ) reader,
   ) {
     _reader = reader;
   }
@@ -58,7 +73,11 @@ class SmartReaderBloc extends Bloc<SmartReaderEvent, SmartReaderState> {
   ) async {
     emit(SmartReaderState(latestResult: state.latestResult, isReading: true));
     if (_reader != null) {
-      final result = await _reader!(event.observation, event.targetLocale);
+      final result = await _reader!(
+        event.observation,
+        event.targetLocale,
+        event.frame,
+      );
       emit(SmartReaderState(latestResult: result, isReading: false));
       return;
     }
