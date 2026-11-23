@@ -1,5 +1,11 @@
 # Openetra Context Changelog
 
+## [0.3.0-phase2] - 2026-11-23
+### Added
+- Installed `ndk;27.0.12077973` & `cmake;3.22.1` and vendored verified Cactus `4.1.4` static libraries + `mirage.cact`.
+- Built C++ JNI bridge (`openetra_mirage_jni.cpp` + `CMakeLists.txt`) and Kotlin plugins (`MirageEnginePlugin`, `CameraXCaptureManager`, `DeviceResourcePlugin`, `HapticsPlugin`).
+- Implemented Dart `MirageResponseParser` and `MirageInferenceProvider` wired into `OpenetraDependencies.bootstrap`.
+
 ## [0.2.0-phase1] - 2026-11-23
 ### Added
 - Scaffolded Flutter Android application (`com.openetra.app`) with Gradle `8.7`, AGP `8.5.2`, Kotlin `1.9.24`, and Dart `3.4.4`-pinned dependencies.

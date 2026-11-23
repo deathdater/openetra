@@ -7,8 +7,8 @@ import '../core/audio/speech_controller.dart';
 import '../core/camera/camera_controller_bridge.dart';
 import '../core/inference/ai_model_orchestrator.dart';
 import '../core/inference/ai_model_registry.dart';
+import '../core/inference/mirage/mirage_inference_provider.dart';
 import '../core/inference/model_provider.dart';
-import '../core/inference/unloaded_vision_provider.dart';
 import '../core/resource_management/bloc/device_resource_bloc.dart';
 import '../core/resource_management/device_resource_manager.dart';
 import '../core/safety/bloc/safety_bloc.dart';
@@ -84,7 +84,7 @@ class OpenetraDependencies {
   }) async {
     final registry = AIModelRegistry();
     final resMgr = resourceManager ?? DeviceResourceManager();
-    final vision = visionProvider ?? UnloadedVisionProvider();
+    final vision = visionProvider ?? MirageInferenceProvider();
     final cam = cameraSource ?? CameraControllerBridge();
     final speech = SpeechController(
       resourceManager: resMgr,

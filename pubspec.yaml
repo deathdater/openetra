@@ -29,3 +29,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/models/mirage.cact
+    - assets/test_fixtures/stop_sign_231049.jpg
+    - assets/test_fixtures/living_room_139.jpg
