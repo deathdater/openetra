@@ -53,6 +53,7 @@ class _AssistiveDialPageState extends State<AssistiveDialPage> {
     switch (route) {
       case DialScreenRoute.settings:
         destination = SettingsScreen(
+          coordinator: coord,
           flashlightController: coord.flashlightController,
           emergencyBloc: coord.emergencyBloc,
           gestureBloc: coord.gestureBloc,

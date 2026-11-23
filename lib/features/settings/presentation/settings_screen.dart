@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../app/openetra_coordinator.dart';
 import '../../../app/theme.dart';
 import '../../../core/audio/bloc/audio_bloc.dart';
 import '../../../core/domain/entities/entities.dart';
@@ -16,9 +17,10 @@ import '../../gestures/bloc/gesture_automation_bloc.dart';
 import '../../gestures/presentation/gesture_automation_screen.dart';
 import '../bloc/settings_bloc.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
+    this.coordinator,
     this.flashlightController,
     this.emergencyBloc,
     this.gestureBloc,
@@ -26,12 +28,18 @@ class SettingsScreen extends StatelessWidget {
     this.dialBloc,
   });
 
+  final OpenetraCoordinator? coordinator;
   final IntelligentFlashlightController? flashlightController;
   final EmergencyBloc? emergencyBloc;
   final GestureAutomationBloc? gestureBloc;
   final FloatingCompanionBloc? floatingCompanionBloc;
   final AssistiveDialBloc? dialBloc;
 
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
   static const List<({String locale, String label})> _languages = [
     (locale: 'en-IN', label: 'English (India)'),
     (locale: 'hi-IN', label: 'Hindi (हिन्दी)'),
@@ -151,7 +159,53 @@ class SettingsScreen extends StatelessWidget {
                     );
                   }),
                   const SizedBox(height: 20),
-                  if (emergencyBloc != null) ...[
+                  if (widget.coordinator != null) ...[
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        'Continuous Scene Understanding',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    AccessibleActionTile(
+                      title: widget.coordinator!.isContinuousSceneActive
+                          ? 'Continuous Scene Mode: Active (Tap to Stop)'
+                          : 'Continuous Scene Mode: Off (Tap to Start)',
+                      subtitle:
+                          'Continuously describes surroundings after each statement finishes speaking',
+                      semanticHint:
+                          'Double tap to toggle continuous scene understanding',
+                      icon: Icons.autorenew_rounded,
+                      filledAccent: widget.coordinator!.isContinuousSceneActive,
+                      onPressed: () async {
+                        await widget.coordinator!
+                            .toggleContinuousSceneUnderstanding();
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Break Between Scene Descriptions: ${widget.coordinator!.continuousSceneBreakSeconds} seconds',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Slider(
+                      value: widget.coordinator!.continuousSceneBreakSeconds
+                          .toDouble(),
+                      min: 3,
+                      max: 30,
+                      divisions: 27,
+                      label:
+                          '${widget.coordinator!.continuousSceneBreakSeconds}s',
+                      onChanged: (v) async {
+                        await widget.coordinator!
+                            .setContinuousSceneBreakSeconds(v.round());
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (widget.emergencyBloc != null) ...[
                     AccessibleActionTile(
                       title: 'Emergency Assistance & Trusted Contacts',
                       subtitle: 'Configure AES-encrypted trusted contacts & test flow',
@@ -162,7 +216,7 @@ class SettingsScreen extends StatelessWidget {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => BlocProvider.value(
-                              value: emergencyBloc!,
+                              value: widget.emergencyBloc!,
                               child: EmergencyAssistanceScreen(
                                 locale: prefs.preferredLanguage,
                               ),
@@ -173,7 +227,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  if (flashlightController != null) ...[
+                  if (widget.flashlightController != null) ...[
                     AccessibleActionTile(
                       title: 'Intelligent Flashlight Controls',
                       subtitle: 'Manual torch toggle and opt-in low-light auto mode',
@@ -183,7 +237,7 @@ class SettingsScreen extends StatelessWidget {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => FlashlightSettingsScreen(
-                              controller: flashlightController!,
+                              controller: widget.flashlightController!,
                             ),
                           ),
                         );
@@ -191,7 +245,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  if (gestureBloc != null) ...[
+                  if (widget.gestureBloc != null) ...[
                     AccessibleActionTile(
                       title: 'Custom Hand Gestures',
                       subtitle: 'Enrol personal gestures to trigger Openetra actions offline',
@@ -201,7 +255,7 @@ class SettingsScreen extends StatelessWidget {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => BlocProvider.value(
-                              value: gestureBloc!,
+                              value: widget.gestureBloc!,
                               child: const GestureAutomationScreen(),
                             ),
                           ),
@@ -210,7 +264,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  if (floatingCompanionBloc != null) ...[
+                  if (widget.floatingCompanionBloc != null) ...[
                     AccessibleActionTile(
                       title: 'Floating Assistive Companion',
                       subtitle: 'Optional overlay orb with calm task-state glow above other apps',
@@ -220,7 +274,7 @@ class SettingsScreen extends StatelessWidget {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => BlocProvider.value(
-                              value: floatingCompanionBloc!,
+                              value: widget.floatingCompanionBloc!,
                               child: const FloatingWidgetSettingsScreen(),
                             ),
                           ),
@@ -229,9 +283,9 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  if (dialBloc != null) ...[
+                  if (widget.dialBloc != null) ...[
                     BlocBuilder<AssistiveDialBloc, AssistiveDialState>(
-                      bloc: dialBloc,
+                      bloc: widget.dialBloc,
                       builder: (context, dialState) {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -253,7 +307,7 @@ class SettingsScreen extends StatelessWidget {
                               semanticHint: 'Double tap to toggle dial haptic feedback',
                               icon: Icons.vibration_outlined,
                               filledAccent: dialState.hapticsEnabled,
-                              onPressed: () => dialBloc!.add(
+                              onPressed: () => widget.dialBloc!.add(
                                 DialUpdatePreferences(
                                   hapticsEnabled: !dialState.hapticsEnabled,
                                 ),
@@ -269,7 +323,7 @@ class SettingsScreen extends StatelessWidget {
                               semanticHint: 'Double tap to switch dial voice verbosity',
                               icon: Icons.record_voice_over_outlined,
                               filledAccent: dialState.detailedAnnouncements,
-                              onPressed: () => dialBloc!.add(
+                              onPressed: () => widget.dialBloc!.add(
                                 DialUpdatePreferences(
                                   detailedAnnouncements:
                                       !dialState.detailedAnnouncements,
@@ -286,7 +340,7 @@ class SettingsScreen extends StatelessWidget {
                               semanticHint: 'Double tap to toggle dial reduced motion',
                               icon: Icons.motion_photos_off_outlined,
                               filledAccent: dialState.reducedMotion,
-                              onPressed: () => dialBloc!.add(
+                              onPressed: () => widget.dialBloc!.add(
                                 DialUpdatePreferences(
                                   reducedMotion: !dialState.reducedMotion,
                                 ),

@@ -257,12 +257,45 @@ class SceneUnderstandingEngine {
     return points;
   }
 
+  static String _indefiniteArticle(String word) {
+    final trimmed = word.trim().toLowerCase();
+    if (trimmed.isEmpty) return 'a';
+    const vowels = {'a', 'e', 'i', 'o', 'u'};
+    return vowels.contains(trimmed[0]) ? 'an' : 'a';
+  }
+
+  static String _naturalEntityLabel(SceneGraphNode n) {
+    final cleanName = n.name.trim();
+    if (n.instanceCount > 1) {
+      return '${n.instanceCount} ${_pluralize(cleanName)}';
+    }
+    return '${_indefiniteArticle(cleanName)} $cleanName';
+  }
+
+  static String _joinNaturalList(List<String> items) {
+    if (items.isEmpty) return '';
+    if (items.length == 1) return items.first;
+    if (items.length == 2) return '${items[0]} and ${items[1]}';
+    return '${items.sublist(0, items.length - 1).join(", ")}, and ${items.last}';
+  }
+
+  static String _naturalZoneSentence(
+    String zonePrefix,
+    List<SceneGraphNode> nodes,
+  ) {
+    final labels = nodes.map(_naturalEntityLabel).toList();
+    final isPlural = nodes.length > 1 || nodes.first.instanceCount > 1;
+    final verb = isPlural ? 'are' : 'is';
+    return '$zonePrefix $verb ${_joinNaturalList(labels)}.';
+  }
+
   String _composeSpeech({
     required VisionObservation observation,
     required SceneGraph graph,
     required String locale,
   }) {
     final parts = <String>[];
+    final isEnglish = OpenetraLocalizer.langCode(locale) == 'en';
 
     if (observation.imageQuality.isDegraded) {
       parts.add(
@@ -273,50 +306,144 @@ class SceneUnderstandingEngine {
       );
     }
 
-    parts.add(
-      OpenetraLocalizer.sceneIntro(
-        environment: graph.environmentCategory,
-        surface: graph.surface,
-        lighting: graph.lighting,
-        locale: locale,
-      ),
-    );
+    if (!isEnglish) {
+      parts.add(
+        OpenetraLocalizer.sceneIntro(
+          environment: graph.environmentCategory,
+          surface: graph.surface,
+          lighting: graph.lighting,
+          locale: locale,
+        ),
+      );
 
-    final confidentNodes = graph.nodes.where((n) => !n.isUncertain).toList();
+      final confidentNodes = graph.nodes.where((n) => !n.isUncertain).toList();
+      if (confidentNodes.isNotEmpty) {
+        final topItems = confidentNodes
+            .take(4)
+            .map((n) => _formatNodePhrase(n, locale: locale))
+            .join(', ');
+        parts.add(OpenetraLocalizer.sceneItemsLead(topItems, locale));
+      }
+
+      if (graph.readableTexts.isNotEmpty) {
+        parts.add(
+          OpenetraLocalizer.sceneTextLead(
+            graph.readableTexts.take(3).join(', '),
+            locale,
+          ),
+        );
+      }
+
+      final uncertain =
+          graph.uncertainNodes.take(2).map((n) => n.name).toList();
+      if (uncertain.isNotEmpty) {
+        parts.add(
+          OpenetraLocalizer.sceneUncertainLead(uncertain.join(', '), locale),
+        );
+      }
+
+      return parts.join(' ');
+    }
+
+    // Human-natural English scene narration grouped by spatial zones.
+    final env = graph.environmentCategory.trim();
+    if (env.isNotEmpty && env.toLowerCase() != 'unclassified area') {
+      final details = <String>[];
+      if (graph.lighting != null && graph.lighting!.trim().isNotEmpty) {
+        details.add('with ${graph.lighting!.trim()} lighting');
+      }
+      if (graph.surface != null && graph.surface!.trim().isNotEmpty) {
+        details.add('on a ${graph.surface!.trim()} surface');
+      }
+      final suffix = details.isEmpty ? '' : ', ${details.join(" ")}';
+      parts.add(
+        'You appear to be in ${_indefiniteArticle(env)} $env$suffix.',
+      );
+    }
+
+    final confidentNodes =
+        graph.nodes.where((n) => !n.isUncertain).take(5).toList();
     if (confidentNodes.isNotEmpty) {
-      final topItems = confidentNodes
-          .take(4)
-          .map((n) => _formatNodePhrase(n, locale: locale))
-          .join(', ');
-      parts.add(OpenetraLocalizer.sceneItemsLead(topItems, locale));
-    } else if (graph.nodes.isEmpty && OpenetraLocalizer.langCode(locale) == 'en') {
-      parts.add('No distinct objects stood out clearly in this frame.');
+      final ahead = <SceneGraphNode>[];
+      final left = <SceneGraphNode>[];
+      final right = <SceneGraphNode>[];
+      final overhead = <SceneGraphNode>[];
+
+      for (final node in confidentNodes) {
+        if (node.relativePosition.vertical == VerticalZone.overhead) {
+          overhead.add(node);
+        } else {
+          switch (node.relativePosition.horizontal) {
+            case HorizontalZone.center:
+              ahead.add(node);
+            case HorizontalZone.left:
+            case HorizontalZone.farLeft:
+              left.add(node);
+            case HorizontalZone.right:
+            case HorizontalZone.farRight:
+              right.add(node);
+          }
+        }
+      }
+
+      if (ahead.isNotEmpty) {
+        parts.add(_naturalZoneSentence('Directly ahead of you', ahead));
+      }
+      if (left.isNotEmpty) {
+        parts.add(_naturalZoneSentence('To your left, there', left));
+      }
+      if (right.isNotEmpty) {
+        parts.add(_naturalZoneSentence('On your right, there', right));
+      }
+      if (overhead.isNotEmpty) {
+        parts.add(_naturalZoneSentence('Overhead, there', overhead));
+      }
+    } else if (graph.nodes.isEmpty) {
+      parts.add(
+        'Nothing distinct stands out clearly in this frame. Try panning the camera slowly.',
+      );
     }
 
-    if (graph.relationships.isNotEmpty &&
-        OpenetraLocalizer.langCode(locale) == 'en') {
+    if (graph.relationships.isNotEmpty) {
       final rel = graph.relationships.first;
-      parts.add('${rel.subjectName} is ${rel.predicate.replaceAll("_", " ")} ${rel.objectName}.');
+      final pred = rel.predicate.replaceAll('_', ' ').trim();
+      final subj =
+          '${_indefiniteArticle(rel.subjectName)} ${rel.subjectName}';
+      parts.add(
+        '${subj[0].toUpperCase()}${subj.substring(1)} is $pred the ${rel.objectName}.',
+      );
     }
 
-    if (graph.events.isNotEmpty && OpenetraLocalizer.langCode(locale) == 'en') {
+    if (graph.events.isNotEmpty) {
       final ev = graph.events.first;
-      parts.add('${ev.actorName} appears to be ${ev.action}.');
+      final actor = '${_indefiniteArticle(ev.actorName)} ${ev.actorName}';
+      parts.add(
+        '${actor[0].toUpperCase()}${actor.substring(1)} appears to be ${ev.action}.',
+      );
     }
 
     if (graph.readableTexts.isNotEmpty) {
       parts.add(
-        OpenetraLocalizer.sceneTextLead(
-          graph.readableTexts.take(3).join(', '),
-          locale,
-        ),
+        'Visible text reads: ${_joinNaturalList(graph.readableTexts.take(3).toList())}.',
       );
     }
 
-    final uncertain = graph.uncertainNodes.take(2).map((n) => n.name).toList();
+    if (graph.changes.isNotEmpty) {
+      final appeared = graph.changes
+          .where((c) => c.type == SceneChangeType.appeared)
+          .take(2)
+          .map((c) => c.summary)
+          .toList();
+      if (appeared.isNotEmpty) {
+        parts.add('Newly in view: ${appeared.join("; ")}.');
+      }
+    }
+
+    final uncertain =
+        graph.uncertainNodes.take(2).map((n) => '${_indefiniteArticle(n.name)} ${n.name}').toList();
     if (uncertain.isNotEmpty) {
       parts.add(
-        OpenetraLocalizer.sceneUncertainLead(uncertain.join(', '), locale),
+        'Less certain, there may also be ${_joinNaturalList(uncertain)}.',
       );
     }
 

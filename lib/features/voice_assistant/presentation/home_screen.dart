@@ -66,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => SettingsScreen(
+                      coordinator: widget.coordinator,
                       flashlightController: widget.coordinator.flashlightController,
                       emergencyBloc: widget.coordinator.emergencyBloc,
                       gestureBloc: widget.coordinator.gestureBloc,

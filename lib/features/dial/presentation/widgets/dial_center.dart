@@ -2,21 +2,22 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../../app/theme.dart';
 import '../../models/dial_menu_node.dart';
+import 'dial_focus_glyph.dart';
 
-/// Central Openetra brand identity disc featuring the approved open-circle,
-/// calm waveform, and warm-orange accent dot. Animates gently ONLY during
-/// active operations and stops completely in idle/paused/reduced-motion states.
+/// Central Openetra sculpted focus disc featuring a unique custom-painted
+/// vector emblem for the focused option, Openetra's open-circle arc, and
+/// warm-orange focal accent. Animates gently ONLY during active operations.
 class DialCenter extends StatefulWidget {
   const DialCenter({
     super.key,
     required this.phase,
-    required this.icon,
+    required this.glyph,
     this.reducedMotion = false,
-    this.size = 136,
+    this.size = 148,
   });
 
   final DialLifecyclePhase phase;
-  final IconData icon;
+  final DialGlyphKind glyph;
   final bool reducedMotion;
   final double size;
 
@@ -127,10 +128,16 @@ class _DialCenterState extends State<DialCenter>
                     widget.phase == DialLifecyclePhase.processing,
               ),
               child: Center(
-                child: Icon(
-                  widget.icon,
-                  size: widget.size * 0.28,
-                  color: OpenetraTheme.primaryText,
+                child: AnimatedSwitcher(
+                  duration: widget.reducedMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  child: DialFocusGlyph(
+                    key: ValueKey(widget.glyph),
+                    glyph: widget.glyph,
+                    size: widget.size * 0.42,
+                  ),
                 ),
               ),
             ),
@@ -157,19 +164,36 @@ class _OpenetraBrandDialPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2;
 
-    // Soft layered ambient halo
+    // Sculpted layered ambient halo
     final haloPaint = Paint()
-      ..color = ringColor.withOpacity(0.14 + pulse * 0.14)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, radius * (0.94 + pulse * 0.05), haloPaint);
+      ..shader = RadialGradient(
+        colors: [
+          ringColor.withOpacity(0.22 + pulse * 0.16),
+          ringColor.withOpacity(0.03),
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: radius));
+    canvas.drawCircle(center, radius * (0.96 + pulse * 0.04), haloPaint);
 
-    // Dark Plum layered core disc
+    // Dark Plum layered instrument disc with subtle radial highlight
     final corePaint = Paint()
-      ..color = OpenetraTheme.surface
-      ..style = PaintingStyle.fill;
+      ..shader = const RadialGradient(
+        center: Alignment(-0.25, -0.30),
+        radius: 1.0,
+        colors: [
+          OpenetraTheme.surfaceElevated,
+          OpenetraTheme.surface,
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: radius * 0.78));
     canvas.drawCircle(center, radius * 0.78, corePaint);
 
-    // Openetra open-circle arc (breaks cleanly near 2 o'clock for orange dot)
+    // Inner hairline precision bevel
+    final innerBevel = Paint()
+      ..color = OpenetraTheme.border.withOpacity(0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    canvas.drawCircle(center, radius * 0.67, innerBevel);
+
+    // Openetra signature open-circle arc
     final arcPaint = Paint()
       ..color = ringColor
       ..style = PaintingStyle.stroke
@@ -187,18 +211,18 @@ class _OpenetraBrandDialPainter extends CustomPainter {
     final dotPaint = Paint()
       ..color = OpenetraTheme.accent
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(dotPos, 5.0 + pulse * 1.5, dotPaint);
+    canvas.drawCircle(dotPos, 5.2 + pulse * 1.5, dotPaint);
 
-    // Subtle waveform bar arcs inside lower disc when speaking/listening/processing
+    // Subtle waveform crest inside lower disc during active voice/processing
     if (isActiveWave) {
       final wavePaint = Paint()
-        ..color = OpenetraTheme.accentLavender.withOpacity(0.75)
+        ..color = OpenetraTheme.accentLavender.withOpacity(0.80)
         ..strokeWidth = 2.4
         ..strokeCap = StrokeCap.round;
       for (var i = -2; i <= 2; i++) {
-        final x = center.dx + i * 9.0;
-        final amp = (4.0 + (2 - i.abs()) * 3.5) * (0.6 + 0.4 * pulse);
-        final yBase = center.dy + radius * 0.38;
+        final x = center.dx + i * 8.5;
+        final amp = (4.0 + (2 - i.abs()) * 3.2) * (0.6 + 0.4 * pulse);
+        final yBase = center.dy + radius * 0.44;
         canvas.drawLine(
           Offset(x, yBase - amp / 2),
           Offset(x, yBase + amp / 2),

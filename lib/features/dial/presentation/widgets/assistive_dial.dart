@@ -186,9 +186,9 @@ class _AssistiveDialState extends State<AssistiveDial> {
                         ),
                         DialCenter(
                           phase: widget.phase,
-                          icon: focused.icon,
+                          glyph: focused.glyph,
                           reducedMotion: widget.reducedMotion,
-                          size: dialExtent * 0.56,
+                          size: dialExtent * 0.60,
                         ),
                       ],
                     ),
@@ -421,21 +421,54 @@ class _RadialMarkersPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final ringRadius = (math.min(size.width, size.height) / 2) - 14.0;
 
+    // Precision watch-dial micro-ticks around outer perimeter
+    final microTickPaint = Paint()
+      ..color = OpenetraTheme.border.withOpacity(0.35)
+      ..strokeWidth = 1.4
+      ..strokeCap = StrokeCap.round;
+    const tickCount = 36;
+    for (var t = 0; t < tickCount; t++) {
+      final a = -math.pi / 2 + (2 * math.pi * t / tickCount);
+      final rIn = ringRadius - 5.0;
+      final rOut = ringRadius + 1.0;
+      canvas.drawLine(
+        Offset(center.dx + math.cos(a) * rIn, center.dy + math.sin(a) * rIn),
+        Offset(center.dx + math.cos(a) * rOut, center.dy + math.sin(a) * rOut),
+        microTickPaint,
+      );
+    }
+
     // Subtle track ring
     final trackPaint = Paint()
       ..color = OpenetraTheme.border.withOpacity(0.45)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
+      ..strokeWidth = 1.8;
     canvas.drawCircle(center, ringRadius, trackPaint);
 
+    // Luminous sector arc highlighting the focused option
+    final activeAngle = -math.pi / 2 + (2 * math.pi * activeIndex / optionCount);
+    final sweep = (2 * math.pi / math.max(optionCount, 3)) * 0.55;
+    final sectorPaint = Paint()
+      ..color = OpenetraTheme.accent.withOpacity(0.85)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.6
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: ringRadius),
+      activeAngle - sweep / 2,
+      sweep,
+      false,
+      sectorPaint,
+    );
+
     final inactivePaint = Paint()
-      ..color = OpenetraTheme.secondaryText.withOpacity(0.45)
+      ..color = OpenetraTheme.secondaryText.withOpacity(0.48)
       ..style = PaintingStyle.fill;
     final activePaint = Paint()
       ..color = OpenetraTheme.accent
       ..style = PaintingStyle.fill;
     final activeHalo = Paint()
-      ..color = accentColor.withOpacity(0.32)
+      ..color = accentColor.withOpacity(0.36)
       ..style = PaintingStyle.fill;
 
     for (var i = 0; i < optionCount; i++) {
@@ -446,9 +479,9 @@ class _RadialMarkersPainter extends CustomPainter {
       );
       if (i == activeIndex) {
         canvas.drawCircle(pos, 13.0, activeHalo);
-        canvas.drawCircle(pos, 7.5, activePaint);
+        canvas.drawCircle(pos, 7.0, activePaint);
       } else {
-        canvas.drawCircle(pos, 4.5, inactivePaint);
+        canvas.drawCircle(pos, 4.2, inactivePaint);
       }
     }
   }

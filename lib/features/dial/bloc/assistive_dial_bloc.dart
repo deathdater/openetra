@@ -197,6 +197,7 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
     Map<String, DialMenuNode>? menuTree,
     this.onFlashlightExplicit,
     this.onToggleContinuousHazard,
+    this.onToggleContinuousScene,
     DateTime Function()? clock,
   })  : _menuTree = menuTree ?? OpenetraDialMenuTree.buildDefaultTree(),
         _clock = clock ?? DateTime.now,
@@ -228,6 +229,7 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
   final Map<String, DialMenuNode> _menuTree;
   final Future<void> Function(bool enabled)? onFlashlightExplicit;
   final Future<void> Function()? onToggleContinuousHazard;
+  final Future<void> Function()? onToggleContinuousScene;
   final DateTime Function() _clock;
 
   StreamSubscription<AssistiveTaskSnapshot>? _taskSub;
@@ -415,10 +417,18 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
         ));
 
       case DialOptionKind.toggleContinuousHazard:
-        await hapticManager.onOptionSelected();
+        unawaited(hapticManager.onOptionSelected());
         await onToggleContinuousHazard?.call();
         emit(state.copyWith(
           statusAnnouncement: 'Toggled continuous hazard cue mode.',
+          clearPendingConfirmation: true,
+        ));
+
+      case DialOptionKind.toggleContinuousScene:
+        unawaited(hapticManager.onOptionSelected());
+        await onToggleContinuousScene?.call();
+        emit(state.copyWith(
+          statusAnnouncement: 'Toggled continuous scene understanding mode.',
           clearPendingConfirmation: true,
         ));
 
@@ -428,12 +438,8 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
           await _emitUnavailable(emit, '${option.title} is unavailable.');
           return;
         }
-        await hapticManager.onOperationStarted();
+        unawaited(hapticManager.onOperationStarted());
         final startMsg = 'Starting ${option.title}.';
-        audioArbitrator.announceSelection(
-          spokenText: startMsg,
-          locale: state.locale,
-        );
         emit(state.copyWith(
           phase: DialLifecyclePhase.executing,
           activeOperationTitle: option.title,

@@ -82,7 +82,8 @@ class AudioBloc extends Bloc<AudioEvent, AudioBlocState> {
     ));
     await announcer.announce(event.response);
     emit(AudioBlocState(
-      isSpeaking: false,
+      isSpeaking: speechController.isAssistantSpeaking ||
+          speechController.hasPendingSpeech,
       locale: event.response.locale,
       speechRate: speechController.speechRate,
       lastSpokenText: event.response.spokenText,

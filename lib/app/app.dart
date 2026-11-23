@@ -305,6 +305,7 @@ class OpenetraDependencies {
       audioBloc: audioBloc,
     );
 
+    await coordinator.loadAssistiveCadencePreferences();
     final hapticManager = HapticFeedbackManager(service: haptics);
     final dialBloc = AssistiveDialBloc(
       taskOrchestrator: taskOrchestrator,
@@ -314,6 +315,7 @@ class OpenetraDependencies {
         await flashlightController.setManualTorch(on);
       },
       onToggleContinuousHazard: coordinator.toggleContinuousHazardAwareness,
+      onToggleContinuousScene: coordinator.toggleContinuousSceneUnderstanding,
     );
 
     settingsBloc.add(const LoadSettings());

@@ -95,13 +95,36 @@ class OpenetraCoordinator {
   AssistantResponse Function(AssistantResponse)? _safetyOutputFilter;
   static const _uuid = Uuid();
 
+  static const String prefContinuousSceneBreakKey = 'continuous_scene_break_sec';
+
   VisionObservation? _lastObservation;
   bool _hazardLoopActive = false;
+  bool _continuousSceneActive = false;
+  int _continuousSceneBreakSeconds = 5;
 
   bool get isHazardLoopActive => _hazardLoopActive;
+  bool get isContinuousSceneActive => _continuousSceneActive;
+  int get continuousSceneBreakSeconds => _continuousSceneBreakSeconds;
+
+  Future<void> loadAssistiveCadencePreferences() async {
+    final raw = await database.getAssistivePreference(prefContinuousSceneBreakKey);
+    final parsed = int.tryParse(raw ?? '');
+    if (parsed != null) {
+      _continuousSceneBreakSeconds = parsed.clamp(3, 30);
+    }
+  }
+
+  Future<void> setContinuousSceneBreakSeconds(int seconds) async {
+    _continuousSceneBreakSeconds = seconds.clamp(3, 30);
+    await database.setAssistivePreference(
+      prefContinuousSceneBreakKey,
+      _continuousSceneBreakSeconds.toString(),
+    );
+  }
 
   Future<void> stopAll() async {
     _hazardLoopActive = false;
+    _continuousSceneActive = false;
     hazardBloc.add(const ResetHazardTracker());
     audioBloc.add(const InterruptSpeechRequested());
     await taskOrchestrator?.cancelCurrentTask(reason: 'Stopped by user');
@@ -292,6 +315,58 @@ class OpenetraCoordinator {
         isDegraded: true,
       );
     }
+  }
+
+  /// Toggles continuous scene understanding: analyzes surroundings, waits for
+  /// the entire spoken description to finish completely, then waits the
+  /// user-configured break interval before analyzing the next frame.
+  Future<void> toggleContinuousSceneUnderstanding({
+    Duration? breakDurationOverride,
+  }) async {
+    if (_continuousSceneActive) {
+      _continuousSceneActive = false;
+      if (cameraResourceManager != null) {
+        await cameraResourceManager!.forceReleaseAll();
+      } else {
+        await cameraSource.stop();
+      }
+      await flashlightController?.endAuthorizedTaskSession();
+      await _emitSpoken(
+        spokenText: 'Continuous scene description stopped.',
+        displaySummary: 'Continuous scene stopped',
+      );
+      return;
+    }
+
+    _continuousSceneActive = true;
+    final breakDuration =
+        breakDurationOverride ?? Duration(seconds: _continuousSceneBreakSeconds);
+    await _emitSpoken(
+      spokenText:
+          'Continuous scene description started, with a ${breakDuration.inSeconds} second break after each description.',
+      displaySummary: 'Continuous scene active (${breakDuration.inSeconds}s break)',
+      haptic: HapticPattern.confirm,
+    );
+
+    unawaited(Future<void>(() async {
+      await speechController?.waitUntilSpeechIdle();
+      while (_continuousSceneActive) {
+        await runDescribeSurroundings();
+        // Wait until the full scene description has finished speaking before
+        // starting the configured pause interval.
+        await speechController?.waitUntilSpeechIdle();
+        if (!_continuousSceneActive) break;
+
+        final breakMs = breakDuration.inMilliseconds;
+        const stepMs = 100;
+        var waited = 0;
+        while (_continuousSceneActive && waited < breakMs) {
+          final slice = (breakMs - waited) < stepMs ? (breakMs - waited) : stepMs;
+          await Future<void>.delayed(Duration(milliseconds: slice));
+          waited += slice;
+        }
+      }
+    }));
   }
 
   /// Workflow B: Hazard Awareness (single scan or continuous loop toggle)

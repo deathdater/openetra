@@ -31,6 +31,7 @@ class AccessibilityAnnouncer {
       response.spokenText,
       locale: response.locale,
       speechRate: speechController.speechRate,
+      interruptCurrent: response.priority == SpeechPriority.critical,
     );
   }
 

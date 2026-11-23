@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openetra/app/app.dart';
@@ -12,10 +13,12 @@ import 'package:openetra/core/audio/haptic_feedback_service.dart';
 import 'package:openetra/core/audio/speech_controller.dart';
 import 'package:openetra/core/domain/entities/entities.dart';
 import 'package:openetra/core/haptics/haptic_feedback_manager.dart';
+import 'package:openetra/core/inference/mirage/mirage_response_parser.dart';
 import 'package:openetra/core/storage/openetra_database.dart';
 import 'package:openetra/features/dial/bloc/assistive_dial_bloc.dart';
 import 'package:openetra/features/dial/domain/dial_gesture_recognizer.dart';
 import 'package:openetra/features/dial/models/dial_menu_node.dart';
+import 'package:openetra/features/scene_understanding/domain/scene_understanding_engine.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -311,5 +314,117 @@ void main() {
     expect(find.text('Read Text'), findsOneWidget);
 
     await tester.runAsync(() => db.close());
+  });
+
+  test('Dial menus omit redundant return items and include Continuous Scene Mode', () {
+    final tree = OpenetraDialMenuTree.buildDefaultTree();
+    for (final node in tree.values) {
+      expect(
+        node.options.any((o) => o.kind == DialOptionKind.returnParent),
+        isFalse,
+        reason: 'Menu ${node.id} should not contain redundant returnParent option',
+      );
+    }
+    final describe = tree['describe_menu']!;
+    expect(
+      describe.options.any((o) => o.kind == DialOptionKind.toggleContinuousScene),
+      isTrue,
+    );
+  });
+
+  test('SpeechController strictly speaks sequentially without overriding in-flight statements', () async {
+    final timeline = <String>[];
+    final firstGate = Completer<void>();
+
+    final controller = SpeechController(
+      enablePlatformTts: false,
+      testSpeakHook: (text) async {
+        timeline.add('start:$text');
+        if (text == 'First statement.') {
+          await firstGate.future;
+        } else {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        timeline.add('end:$text');
+      },
+    );
+
+    final f1 = controller.speak('First statement.', locale: 'en-IN', speechRate: 0.5);
+    final f2 = controller.speak('Second statement.', locale: 'en-IN', speechRate: 0.5);
+
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    // Statement 2 must NOT have started while Statement 1 is still speaking!
+    expect(timeline, ['start:First statement.']);
+
+    firstGate.complete();
+    await Future.wait([f1, f2]);
+    expect(timeline, [
+      'start:First statement.',
+      'end:First statement.',
+      'start:Second statement.',
+      'end:Second statement.',
+    ]);
+  });
+
+  test('SceneUnderstandingEngine produces clear human-natural spatial English descriptions', () {
+    const parser = MirageResponseParser();
+    const engine = SceneUnderstandingEngine();
+    const sampleJson = '''
+{
+  "scene": {
+    "setting": "living room",
+    "lighting": "soft"
+  },
+  "objects": [
+    {"id": 1, "name": "couch", "score": 0.92, "bbox": [350, 420, 650, 720]},
+    {"id": 2, "name": "chair", "score": 0.88, "bbox": [60, 440, 260, 740]},
+    {"id": 3, "name": "lamp", "score": 0.85, "bbox": [760, 320, 920, 640]}
+  ],
+  "text": [
+    {"string": "EXIT", "score": 0.9, "bbox": [400, 80, 550, 140]}
+  ]
+}
+''';
+    final obs = parser.parse(
+      rawJson: sampleJson,
+      inputWidth: 640,
+      inputHeight: 480,
+      processingDurationMs: 120,
+      imageQuality: ImageQualityMetrics.nominal,
+    );
+
+    final desc = engine.build(obs);
+    expect(desc.spokenSummary, contains('You appear to be in a living room'));
+    expect(desc.spokenSummary, contains('Directly ahead of you is a couch.'));
+    expect(desc.spokenSummary, contains('To your left, there is a chair.'));
+    expect(desc.spokenSummary, contains('On your right, there is a lamp.'));
+    expect(desc.spokenSummary, contains('Visible text reads: EXIT.'));
+    expect(desc.spokenSummary, isNot(contains('Setting:')));
+    expect(desc.spokenSummary, isNot(contains('(ahead)')));
+  });
+
+  test('OpenetraCoordinator persists continuous scene break interval and runs/stops continuous mode cleanly', () async {
+    final db = await OpenetraDatabase.open(
+      factory: databaseFactoryFfi,
+      dbPath: inMemoryDatabasePath,
+    );
+    addTearDown(db.close);
+    final deps = await OpenetraDependencies.bootstrap(
+      database: db,
+      enablePlatformTts: false,
+    );
+
+    await deps.coordinator.setContinuousSceneBreakSeconds(9);
+    expect(deps.coordinator.continuousSceneBreakSeconds, 9);
+    expect(await db.getAssistivePreference('continuous_scene_break_sec'), '9');
+
+    await deps.coordinator.toggleContinuousSceneUnderstanding(
+      breakDurationOverride: const Duration(milliseconds: 50),
+    );
+    expect(deps.coordinator.isContinuousSceneActive, isTrue);
+
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await deps.coordinator.toggleContinuousSceneUnderstanding();
+    expect(deps.coordinator.isContinuousSceneActive, isFalse);
   });
 }
