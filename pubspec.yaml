@@ -39,5 +39,6 @@ flutter:
     - assets/models/tessdata/mal.traineddata
     - assets/models/tessdata/ben.traineddata
     - assets/models/vad/silero_vad.int8.onnx
+    - assets/models/gesture/hand_landmarks_detector.tflite
     - assets/test_fixtures/stop_sign_231049.jpg
     - assets/test_fixtures/living_room_139.jpg

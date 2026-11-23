@@ -3,6 +3,7 @@ package com.openetra.app
 import com.openetra.app.camera.CameraXCaptureManager
 import com.openetra.app.emergency.EmergencyAssistancePlugin
 import com.openetra.app.flashlight.FlashlightPlugin
+import com.openetra.app.gesture.HandGesturePlugin
 import com.openetra.app.haptics.HapticsPlugin
 import com.openetra.app.mirage.MirageEnginePlugin
 import com.openetra.app.ocr.IndicOcrPlugin
@@ -22,6 +23,7 @@ class MainActivity : FlutterActivity() {
     private var specialistPlugin: SpecialistVisionPlugin? = null
     private var emergencyPlugin: EmergencyAssistancePlugin? = null
     private var flashlightPlugin: FlashlightPlugin? = null
+    private var handGesturePlugin: HandGesturePlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -36,9 +38,11 @@ class MainActivity : FlutterActivity() {
         specialistPlugin = SpecialistVisionPlugin(applicationContext, messenger)
         emergencyPlugin = EmergencyAssistancePlugin(applicationContext, messenger)
         flashlightPlugin = FlashlightPlugin(applicationContext, cam, messenger)
+        handGesturePlugin = HandGesturePlugin(applicationContext, messenger)
     }
 
     override fun onDestroy() {
+        handGesturePlugin?.release()
         flashlightPlugin?.release()
         emergencyPlugin?.release()
         miragePlugin?.release()

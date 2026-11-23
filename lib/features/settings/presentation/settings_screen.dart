@@ -9,6 +9,8 @@ import '../../emergency/bloc/emergency_bloc.dart';
 import '../../emergency/presentation/emergency_assistance_screen.dart';
 import '../../flashlight/domain/intelligent_flashlight_controller.dart';
 import '../../flashlight/presentation/flashlight_settings_screen.dart';
+import '../../gestures/bloc/gesture_automation_bloc.dart';
+import '../../gestures/presentation/gesture_automation_screen.dart';
 import '../bloc/settings_bloc.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -16,10 +18,12 @@ class SettingsScreen extends StatelessWidget {
     super.key,
     this.flashlightController,
     this.emergencyBloc,
+    this.gestureBloc,
   });
 
   final IntelligentFlashlightController? flashlightController;
   final EmergencyBloc? emergencyBloc;
+  final GestureAutomationBloc? gestureBloc;
 
   static const List<({String locale, String label})> _languages = [
     (locale: 'en-IN', label: 'English (India)'),
@@ -173,6 +177,25 @@ class SettingsScreen extends StatelessWidget {
                           MaterialPageRoute<void>(
                             builder: (_) => FlashlightSettingsScreen(
                               controller: flashlightController!,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (gestureBloc != null) ...[
+                    AccessibleActionTile(
+                      title: 'Custom Hand Gestures',
+                      subtitle: 'Enrol personal gestures to trigger Openetra actions offline',
+                      semanticHint: 'Double tap to configure custom hand gestures',
+                      icon: Icons.pan_tool_outlined,
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => BlocProvider.value(
+                              value: gestureBloc!,
+                              child: const GestureAutomationScreen(),
                             ),
                           ),
                         );

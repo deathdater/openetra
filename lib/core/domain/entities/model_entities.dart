@@ -12,6 +12,7 @@ enum ModelTask {
   barcodeLookup,
   hazardSpecialist,
   vad,
+  handGesture,
 }
 
 enum ModelRuntime {

@@ -32,6 +32,10 @@ class AIModelRegistry {
       '31163084c279aaebd376216f0c3d5c17ad4b5fee8db49dae79c20000b5de5964';
   static const String sileroVadSha256 =
       'c36d490aff5ab924ca6c7aeec4d8f6bd3d22db6fa17611b9c5b17eae58ac3a20';
+  static const String handLandmarkId = 'mediapipe-hand-landmarks-fp16';
+  static const String handLandmarkSha256 =
+      '6acda74af3fbf40e68265c20c7394b2bad81a16a481dcd79ad7a081887c3d6b9';
+  static const int handLandmarkSizeBytes = 5478949;
 
   static final List<ModelMetadata> defaultCatalog = [
     const ModelMetadata(
@@ -316,6 +320,25 @@ class AIModelRegistry {
       hardwareCompatibility: ['arm64-v8a', 'armeabi-v7a'],
       expectedSha256: 'pending-pack-pin-phase6-inr-00000000000000000000000000000000000',
       status: ModelStatus.notInstalled,
+    ),
+    const ModelMetadata(
+      modelId: handLandmarkId,
+      displayName: 'MediaPipe Hand Landmarks Detector (LiteRT fp16)',
+      version: 'hand_landmarker/float16/1',
+      supportedTasks: [ModelTask.handGesture],
+      languages: ['universal'],
+      inputSpec: '224x224x3 float32 RGB [0..1]',
+      outputSpec: '21 3D hand landmarks + presence + handedness',
+      runtime: ModelRuntime.liteRtTflite,
+      sizeBytes: handLandmarkSizeBytes,
+      ramRequirementMb: 24,
+      quantization: 'Float16 TFLite (LiteRT 1.4.2 XNNPACK)',
+      licence: 'Apache-2.0',
+      hardwareCompatibility: ['arm64-v8a', 'armeabi-v7a'],
+      expectedSha256: handLandmarkSha256,
+      status: ModelStatus.verifiedReady,
+      provenanceUrl:
+          'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
     ),
   ];
 

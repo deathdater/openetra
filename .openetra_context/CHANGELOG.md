@@ -1,5 +1,11 @@
 # Openetra Context Changelog
 
+## [1.3.0-gesture-automation] - 2026-11-23
+### Added & Verified
+- Bundled Apache-2.0 MediaPipe `hand_landmarks_detector.tflite` (`5,478,949 B`, SHA-256 pinned in `AIModelRegistry` & `HandGesturePlugin.kt`) running on bundled LiteRT `1.4.2` XNNPACK with zero new Gradle dependencies.
+- Implemented `HandGesturePlugin.kt`, `HandLandmarkFeatureExtractor` (84-dim palm-centered descriptor), `GestureEnrollmentEngine`, `GestureRecognitionEngine`, `GestureAutomationBloc`, and `GestureAutomationScreen`, routing validated matches through `TaskOrchestrator` with explicit emergency opt-in safeguards.
+- Verified with `flutter analyze` (`No issues found!`) and `flutter test -r expanded` (`56/56` passing, including `gesture_evaluation_test.dart`).
+
 ## [1.2.0-emergency-flashlight] - 2026-11-23
 ### Added & Verified
 - Implemented Emergency Assistance (`EmergencyAssistancePlugin.kt` Android Keystore AES-256-GCM + `ACTION_DIAL`, `EmergencyAssistanceService`, `EmergencyBloc`, `EmergencyAssistanceScreen`, `EmergencyContactsScreen`, dry-run test mode, and `SettingsBloc` data wipe integration).

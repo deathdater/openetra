@@ -19,6 +19,7 @@ import '../core/storage/openetra_database.dart';
 import '../features/currency/domain/currency_recognition_service.dart';
 import '../features/emergency/bloc/emergency_bloc.dart';
 import '../features/flashlight/domain/intelligent_flashlight_controller.dart';
+import '../features/gestures/bloc/gesture_automation_bloc.dart';
 import '../features/hazard_detection/bloc/hazard_detection_bloc.dart';
 import '../features/navigation/domain/navigation_cue_service.dart';
 import '../features/object_memory/bloc/object_memory_bloc.dart';
@@ -54,6 +55,7 @@ class OpenetraCoordinator {
     this.taskOrchestrator,
     this.emergencyBloc,
     this.flashlightController,
+    this.gestureBloc,
     ShoppingAssistantService? shoppingService,
     CurrencyRecognitionService? currencyService,
     AssistantResponse Function(AssistantResponse)? safetyOutputFilter,
@@ -83,6 +85,7 @@ class OpenetraCoordinator {
   final TaskOrchestrator? taskOrchestrator;
   final EmergencyBloc? emergencyBloc;
   final IntelligentFlashlightController? flashlightController;
+  final GestureAutomationBloc? gestureBloc;
 
   final ShoppingAssistantService _shoppingService;
   final CurrencyRecognitionService _currencyService;

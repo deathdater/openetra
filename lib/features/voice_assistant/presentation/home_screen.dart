@@ -68,6 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     builder: (_) => SettingsScreen(
                       flashlightController: widget.coordinator.flashlightController,
                       emergencyBloc: widget.coordinator.emergencyBloc,
+                      gestureBloc: widget.coordinator.gestureBloc,
                     ),
                   ),
                 );
