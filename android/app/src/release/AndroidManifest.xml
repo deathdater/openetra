@@ -1,7 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-    <!-- Release builds enforce OS-level zero-network isolation by removing any
-         transitive network permissions declared by bundled AAR dependencies. -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Release builds retain INTERNET and ACCESS_NETWORK_STATE declared in main/AndroidManifest.xml
+         strictly for optional, user-initiated Local Intelligence Beta model downloads.
+         Core Openetra features remain 100% offline with zero telemetry or cloud inference. -->
 </manifest>

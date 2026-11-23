@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -176,6 +177,22 @@ class LocalIntelligencePlugin(
     }
 
     private fun openInternetSettingsPanel(): Boolean {
+        val hasManifestPerm = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.INTERNET
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!hasManifestPerm) {
+            return try {
+                val appSettings = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(appSettings)
+                true
+            } catch (_: Throwable) {
+                false
+            }
+        }
         return try {
             val action = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 Settings.Panel.ACTION_INTERNET_CONNECTIVITY

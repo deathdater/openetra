@@ -728,6 +728,11 @@ class _OpenetraAppState extends State<OpenetraApp> with WidgetsBindingObserver {
                 onPressed: () => Navigator.of(dialogContext).pop('later'),
                 child: const Text('Not Now'),
               ),
+              if (optionalMissing.isNotEmpty)
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop('internet'),
+                  child: const Text('Network Settings (Optional)'),
+                ),
               if (hasPermanentlyDenied)
                 OutlinedButton(
                   onPressed: () => Navigator.of(dialogContext).pop('settings'),
@@ -767,6 +772,8 @@ class _OpenetraAppState extends State<OpenetraApp> with WidgetsBindingObserver {
         }
       } else if (choice == 'settings') {
         await widget.deps.permissionCoordinator.openSystemSettings();
+      } else if (choice == 'internet') {
+        await widget.deps.permissionCoordinator.openInternetSettings();
       }
     } finally {
       _isPermissionFlowActive = false;
