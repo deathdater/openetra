@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 import '../domain/entities/entities.dart';
 import '../errors/openetra_failure.dart';
+import '../../features/shopping/domain/shopping_assistant_service.dart';
 
 /// User preferences snapshot stored offline in SQLite.
 class UserPreferencesRecord {
@@ -51,7 +52,7 @@ class OpenetraDatabase {
   OpenetraDatabase._(this._db);
 
   final Database _db;
-  static const int schemaVersion = 1;
+  static const int schemaVersion = 2;
 
   /// Opens or creates the local database. Pass [factory] (e.g. sqflite_common_ffi)
   /// and [dbPath] (`inMemoryDatabasePath`) for deterministic host unit tests.
@@ -72,6 +73,14 @@ class OpenetraDatabase {
           },
           onCreate: (database, version) async {
             await _createSchema(database);
+            await _createLocalProductsTable(database);
+            await _seedInitialProducts(database);
+          },
+          onUpgrade: (database, oldVersion, newVersion) async {
+            if (oldVersion < 2) {
+              await _createLocalProductsTable(database);
+              await _seedInitialProducts(database);
+            }
           },
         ),
       );
@@ -206,6 +215,77 @@ class OpenetraDatabase {
         recorded_at_ms INTEGER NOT NULL
       )
     ''');
+  }
+
+  static Future<void> _createLocalProductsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS local_products (
+        barcode TEXT PRIMARY KEY,
+        product_name TEXT NOT NULL,
+        brand TEXT,
+        net_quantity TEXT,
+        category TEXT,
+        source TEXT NOT NULL,
+        updated_at_ms INTEGER NOT NULL
+      )
+    ''');
+  }
+
+  static Future<void> _seedInitialProducts(Database db) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    const seeds = [
+      (
+        barcode: '8901058851234',
+        name: 'Masala 2-Minute Noodles',
+        brand: 'Maggi',
+        qty: '70 g',
+        cat: 'packaged_food',
+      ),
+      (
+        barcode: '8901063092723',
+        name: 'Good Day Butter Cookies',
+        brand: 'Britannia',
+        qty: '100 g',
+        cat: 'biscuits',
+      ),
+      (
+        barcode: '8901725133719',
+        name: 'Shudh Chakki Atta',
+        brand: 'Aashirvaad',
+        qty: '1 kg',
+        cat: 'staples',
+      ),
+      (
+        barcode: '8901491101837',
+        name: 'Original Glucose Biscuits',
+        brand: 'Parle-G',
+        qty: '80 g',
+        cat: 'biscuits',
+      ),
+      (
+        barcode: '8901030865442',
+        name: 'Vacuum Evaporated Iodized Salt',
+        brand: 'Tata Salt',
+        qty: '1 kg',
+        cat: 'staples',
+      ),
+    ];
+
+    for (final s in seeds) {
+      await db.insert(
+        'local_products',
+        {
+          'barcode': s.barcode,
+          'product_name': s.name,
+          'brand': s.brand,
+          'net_quantity': s.qty,
+          'category': s.cat,
+          'source': 'builtin_sample',
+          'updated_at_ms': nowMs,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
   }
 
   Future<List<String>> listTableNames() async {
@@ -523,6 +603,75 @@ class OpenetraDatabase {
       _db.query('benchmark_metadata',
           orderBy: 'recorded_at_ms DESC', limit: limit);
 
+  Future<List<List<double>>> getObjectEmbeddings(String objectId) async {
+    final rows = await _db.query(
+      'object_embeddings',
+      where: 'object_id = ?',
+      whereArgs: [objectId],
+      orderBy: 'created_at_ms DESC',
+    );
+    return rows.map((r) {
+      final bytes = r['embedding_blob'] as Uint8List;
+      final dim = r['dimension'] as int;
+      final bd = ByteData.sublistView(bytes);
+      final out = <double>[];
+      for (int i = 0; i < dim && (i * 4 + 4) <= bytes.length; i++) {
+        out.add(bd.getFloat32(i * 4, Endian.host));
+      }
+      return out;
+    }).toList();
+  }
+
+  Future<LocalProductMatch?> lookupLocalProduct(String barcode) async {
+    final rows = await _db.query(
+      'local_products',
+      where: 'barcode = ?',
+      whereArgs: [barcode.trim()],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final r = rows.first;
+    return LocalProductMatch(
+      barcode: r['barcode'] as String,
+      productName: r['product_name'] as String,
+      brand: r['brand'] as String?,
+      netQuantity: r['net_quantity'] as String?,
+      category: r['category'] as String?,
+    );
+  }
+
+  Future<void> upsertLocalProduct({
+    required LocalProductMatch product,
+    String source = 'user_added',
+  }) async {
+    await _db.insert(
+      'local_products',
+      {
+        'barcode': product.barcode.trim(),
+        'product_name': product.productName.trim(),
+        'brand': product.brand?.trim(),
+        'net_quantity': product.netQuantity?.trim(),
+        'category': product.category?.trim(),
+        'source': source,
+        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<LocalProductMatch>> listLocalProducts() async {
+    final rows = await _db.query('local_products', orderBy: 'updated_at_ms DESC');
+    return rows
+        .map((r) => LocalProductMatch(
+              barcode: r['barcode'] as String,
+              productName: r['product_name'] as String,
+              brand: r['brand'] as String?,
+              netQuantity: r['net_quantity'] as String?,
+              category: r['category'] as String?,
+            ))
+        .toList();
+  }
+
   /// User-controlled atomic deletion of personal data, history, scanned docs, and safety logs.
   Future<void> deleteAllUserData() async {
     await _db.transaction((txn) async {
@@ -532,6 +681,11 @@ class OpenetraDatabase {
       await txn.delete('scanned_documents');
       await txn.delete('conversation_history');
       await txn.delete('safety_events');
+      await txn.delete(
+        'local_products',
+        where: 'source != ?',
+        whereArgs: ['builtin_sample'],
+      );
     });
   }
 

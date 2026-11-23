@@ -1,5 +1,11 @@
 # Openetra Context Changelog
 
+## [0.8.0-phase6-specialist-and-shopping] - 2026-11-23
+### Added
+- Upgraded `OpenetraDatabase` to schema v2 (`local_products` table + `onUpgrade` migration + 5 seeded Indian EAN-890 sample items + `getObjectEmbeddings`, `lookupLocalProduct`, `upsertLocalProduct`, `listLocalProducts`).
+- Implemented `SpecialistVisionPlugin` (`com.openetra.app/specialist`) with ML Kit `17.3.0` barcode decoding, 96-dim L2-normalized HSV+spatial+edge crop descriptor (`computeCropDescriptor96`), and LiteRT `2.4.0` currency slot, wired via `MainActivity.kt` and `native_specialist_providers.dart`.
+- Integrated crop embedding matching into `ObjectMemoryBloc`, Mirage `form` + OCR + LiteRT fusion into `CurrencyRecognitionService`, and `SqliteProductCatalogLookup` + `ShoppingScreen` into `OpenetraCoordinator` and `HomeScreen`.
+
 ## [0.7.0-phase5-indic-intelligence] - 2026-11-23
 ### Added
 - Vendored verified `sherpa-onnx 2.0.3` static-OR AAR, `silero_vad.int8.onnx`, `hin.traineddata`, and `kan.traineddata`; added ML Kit Devanagari, Tesseract4Android, ML Kit Barcode, and LiteRT Gradle dependencies.

@@ -3,9 +3,10 @@ import '../../../core/domain/entities/entities.dart';
 import '../../../core/inference/model_provider.dart';
 import '../../../core/localization/openetra_localizer.dart';
 
-/// Workflow E: Offline Indian currency recognition combining a compact
-/// classifier interface with Mirage OCR numeral evidence. Never uses color
-/// alone and never claims counterfeit authentication.
+/// Workflow E: Offline Indian currency recognition fusing optional LiteRT
+/// banknote classifier, Mirage constrained `form` probability, and Mirage OCR
+/// printed numeral cross-check. Never uses color alone and never claims
+/// counterfeit authentication.
 class CurrencyRecognitionService {
   const CurrencyRecognitionService({this.classifier});
 
@@ -15,11 +16,18 @@ class CurrencyRecognitionService {
   static const String nonCounterfeitDisclaimer =
       'Openetra cannot verify whether a currency note is genuine or counterfeit.';
 
+  static const Map<String, dynamic> mirageCurrencyFormSchema = {
+    'denomination': {
+      'enum': ['10', '20', '50', '100', '200', '500', 'none'],
+    },
+  };
+
   static const Set<int> _validDenominations = {10, 20, 50, 100, 200, 500};
 
   Future<CurrencyRecognitionResult> identify({
     required CapturedFrame frame,
     required VisionObservation mirageObservation,
+    VisionObservation? formObservation,
     String locale = 'en-IN',
   }) async {
     final disclaimer = OpenetraLocalizer.currencyNonCounterfeitDisclaimer(locale);
@@ -40,6 +48,8 @@ class CurrencyRecognitionService {
     }
 
     final ocrNumeral = _extractDenominationFromOcr(mirageObservation.textSpans);
+    final formPick = _extractFromMirageForm(formObservation?.formResult);
+
     Map<InrDenomination, double> scores = const {};
     String sourceModel = mirageObservation.provenance.modelId;
 
@@ -57,7 +67,45 @@ class CurrencyRecognitionService {
       }
     }
 
-    // Cross-validate specialist classifier with OCR numeral evidence.
+    // Fuse Mirage constrained form if dedicated LiteRT classifier is not installed.
+    if (bestDenom == InrDenomination.uncertain && formPick != null) {
+      final formDenom = formPick.denomination;
+      final formProb = formPick.probability;
+      if (formDenom != InrDenomination.uncertain && formProb >= 0.55) {
+        final disagreesWithOcr =
+            ocrNumeral != null && ocrNumeral != formDenom.value;
+        if (disagreesWithOcr) {
+          return CurrencyRecognitionResult(
+            provenance: formObservation!.provenance,
+            denomination: InrDenomination.uncertain,
+            classifierConfidence: formProb,
+            ocrMatchedValue: ocrNumeral,
+            isUncertain: true,
+            spokenAdvisory:
+                'Uncertain result: visual form suggests ${formDenom.spokenLabel}, '
+                'but printed numeral looks like $ocrNumeral. Flip the note and scan again. $disclaimer',
+            nonCounterfeitDisclaimer: disclaimer,
+          );
+        }
+        final uncertain = ocrNumeral == null || formProb < 0.75;
+        return CurrencyRecognitionResult(
+          provenance: formObservation!.provenance,
+          denomination: formDenom,
+          classifierConfidence: formProb,
+          ocrMatchedValue: ocrNumeral,
+          isUncertain: uncertain,
+          spokenAdvisory: OpenetraLocalizer.currencyIdentified(
+            formDenom,
+            (formProb * 100).round(),
+            ocrNumeral,
+            locale,
+          ),
+          nonCounterfeitDisclaimer: disclaimer,
+        );
+      }
+    }
+
+    // Cross-validate specialist classifier vs OCR numeral evidence.
     if (bestDenom == InrDenomination.uncertain && ocrNumeral != null) {
       bestDenom = InrDenomination.values.firstWhere(
         (d) => d.value == ocrNumeral,
@@ -147,6 +195,29 @@ class CurrencyRecognitionService {
       spokenAdvisory: advisory,
       nonCounterfeitDisclaimer: disclaimer,
     );
+  }
+
+  static ({InrDenomination denomination, double probability})? _extractFromMirageForm(
+    Map<String, dynamic>? formResult,
+  ) {
+    if (formResult == null || formResult.isEmpty) return null;
+    final entry = formResult['denomination'];
+    if (entry is! Map) return null;
+    final valueStr = entry['value']?.toString();
+    final parsed = int.tryParse(valueStr ?? '');
+    if (parsed == null || !_validDenominations.contains(parsed)) {
+      return null;
+    }
+    double prob = 0.6;
+    final probs = entry['probabilities'];
+    if (probs is Map && probs[valueStr] is num) {
+      prob = (probs[valueStr] as num).toDouble().clamp(0.0, 1.0);
+    }
+    final denom = InrDenomination.values.firstWhere(
+      (d) => d.value == parsed,
+      orElse: () => InrDenomination.uncertain,
+    );
+    return (denomination: denom, probability: prob);
   }
 
   static int? _extractDenominationFromOcr(List<PerceivedTextSpan> spans) {

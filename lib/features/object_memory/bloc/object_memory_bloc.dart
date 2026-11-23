@@ -1,7 +1,10 @@
+import 'dart:typed_data';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/domain/entities/entities.dart';
+import '../../../core/inference/model_provider.dart';
+import '../../../core/inference/specialist/native_specialist_providers.dart';
 import '../../../core/storage/openetra_database.dart';
 
 abstract class ObjectMemoryEvent extends Equatable {
@@ -21,15 +24,26 @@ class RegisterPersonalObject extends ObjectMemoryEvent {
     this.category = 'personal',
     this.colorHint,
     this.description,
+    this.sampleFrame,
+    this.sampleCrop,
   });
 
   final String name;
   final String category;
   final String? colorHint;
   final String? description;
+  final CapturedFrame? sampleFrame;
+  final BoundingBox? sampleCrop;
 
   @override
-  List<Object?> get props => [name, category, colorHint, description];
+  List<Object?> get props => [
+        name,
+        category,
+        colorHint,
+        description,
+        sampleFrame,
+        sampleCrop,
+      ];
 }
 
 class RemovePersonalObject extends ObjectMemoryEvent {
@@ -41,12 +55,17 @@ class RemovePersonalObject extends ObjectMemoryEvent {
 }
 
 class FindPersonalObject extends ObjectMemoryEvent {
-  const FindPersonalObject(this.objectName, {this.observation});
+  const FindPersonalObject(
+    this.objectName, {
+    this.observation,
+    this.frame,
+  });
   final String objectName;
   final VisionObservation? observation;
+  final CapturedFrame? frame;
 
   @override
-  List<Object?> get props => [objectName, observation];
+  List<Object?> get props => [objectName, observation, frame];
 }
 
 class ObjectMemoryState extends Equatable {
@@ -65,7 +84,10 @@ class ObjectMemoryState extends Equatable {
 }
 
 class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
-  ObjectMemoryBloc({required this.database}) : super(const ObjectMemoryState()) {
+  ObjectMemoryBloc({
+    required this.database,
+    this.embeddingProvider,
+  }) : super(const ObjectMemoryState()) {
     on<LoadPersonalObjects>(_onLoad);
     on<RegisterPersonalObject>(_onRegister);
     on<RemovePersonalObject>(_onRemove);
@@ -73,6 +95,7 @@ class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
   }
 
   final OpenetraDatabase database;
+  final EmbeddingProvider? embeddingProvider;
   static const _uuid = Uuid();
 
   Future<void> _onLoad(
@@ -91,9 +114,10 @@ class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
     Emitter<ObjectMemoryState> emit,
   ) async {
     final now = DateTime.now();
+    final objId = _uuid.v4();
     await database.upsertPersonalObject(
       PersonalObjectProfile(
-        id: _uuid.v4(),
+        id: objId,
         name: event.name.trim(),
         category: event.category,
         colorHint: event.colorHint,
@@ -102,10 +126,28 @@ class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
         updatedAt: now,
       ),
     );
+    bool embedded = false;
+    if (event.sampleFrame != null && embeddingProvider != null) {
+      final vec = await embeddingProvider!.computeEmbedding(
+        event.sampleFrame!,
+        event.sampleCrop ?? const BoundingBox(x1: 0, y1: 0, x2: 1000, y2: 1000),
+      );
+      if (vec != null && vec.isNotEmpty) {
+        await database.saveObjectEmbedding(
+          id: _uuid.v4(),
+          objectId: objId,
+          modelId: embeddingProvider!.modelId,
+          vector: Float32List.fromList(vec),
+        );
+        embedded = true;
+      }
+    }
     final list = await database.listPersonalObjects();
     emit(ObjectMemoryState(
       profiles: list,
-      lastSearchResult: 'Saved ${event.name.trim()} to personal object memory.',
+      lastSearchResult: embedded
+          ? 'Saved ${event.name.trim()} with visual appearance embedding offline.'
+          : 'Saved ${event.name.trim()} to personal object memory.',
     ));
   }
 
@@ -164,7 +206,37 @@ class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
       return 'far right';
     }
 
-    if (matches.length > 1) {
+    final matchingProfile = state.profiles.where(
+      (p) => p.name.toLowerCase().contains(target),
+    );
+    List<List<double>> storedVecs = const [];
+    if (matchingProfile.isNotEmpty) {
+      storedVecs = await database.getObjectEmbeddings(matchingProfile.first.id);
+    }
+
+    // Score candidates with visual embedding similarity if available.
+    ObjectDetection bestMatch = matches.first;
+    double bestCosine = -1.0;
+    if (event.frame != null &&
+        embeddingProvider != null &&
+        storedVecs.isNotEmpty) {
+      for (final candidate in matches) {
+        final candVec = await embeddingProvider!.computeEmbedding(
+          event.frame!,
+          candidate.boundingBox,
+        );
+        if (candVec == null) continue;
+        for (final refVec in storedVecs) {
+          final sim = cosineSimilarity(candVec, refVec);
+          if (sim > bestCosine) {
+            bestCosine = sim;
+            bestMatch = candidate;
+          }
+        }
+      }
+    }
+
+    if (matches.length > 1 && bestCosine < 0.80) {
       final locations = matches.take(3).map((m) => zone(m.boundingBox)).join(', ');
       emit(ObjectMemoryState(
         profiles: state.profiles,
@@ -174,26 +246,25 @@ class ObjectMemoryBloc extends Bloc<ObjectMemoryEvent, ObjectMemoryState> {
       return;
     }
 
-    final found = matches.first;
-    final pos = zone(found.boundingBox);
-    final matchingProfile = state.profiles.where(
-      (p) => p.name.toLowerCase().contains(target),
-    );
+    final pos = zone(bestMatch.boundingBox);
     if (matchingProfile.isNotEmpty) {
       await database.recordLastSeen(
         id: _uuid.v4(),
         objectId: matchingProfile.first.id,
         sceneSetting: obs.setting ?? 'current view',
         relativePosition: pos,
-        confidence: found.confidence,
+        confidence: bestMatch.confidence,
       );
     }
 
+    final embedNote = bestCosine >= 0.78
+        ? ', visual appearance similarity ${(bestCosine * 100).round()}%'
+        : '';
     final list = await database.listPersonalObjects();
     emit(ObjectMemoryState(
       profiles: list,
       lastSearchResult:
-          'Found ${found.name} in the $pos of the camera view (confidence ${(found.confidence * 100).round()}%).',
+          'Found ${bestMatch.name} in the $pos of the camera view (confidence ${(bestMatch.confidence * 100).round()}%$embedNote).',
     ));
   }
 }

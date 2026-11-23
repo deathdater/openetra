@@ -5,6 +5,7 @@ import com.openetra.app.haptics.HapticsPlugin
 import com.openetra.app.mirage.MirageEnginePlugin
 import com.openetra.app.ocr.IndicOcrPlugin
 import com.openetra.app.resources.DeviceResourcePlugin
+import com.openetra.app.specialist.SpecialistVisionPlugin
 import com.openetra.app.speech.OfflineSpeechPlugin
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -16,6 +17,7 @@ class MainActivity : FlutterActivity() {
     private var hapticsPlugin: HapticsPlugin? = null
     private var indicOcrPlugin: IndicOcrPlugin? = null
     private var offlineSpeechPlugin: OfflineSpeechPlugin? = null
+    private var specialistPlugin: SpecialistVisionPlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -26,6 +28,7 @@ class MainActivity : FlutterActivity() {
         hapticsPlugin = HapticsPlugin(applicationContext, messenger)
         indicOcrPlugin = IndicOcrPlugin(applicationContext, messenger)
         offlineSpeechPlugin = OfflineSpeechPlugin(applicationContext, messenger)
+        specialistPlugin = SpecialistVisionPlugin(applicationContext, messenger)
     }
 
     override fun onDestroy() {
@@ -35,6 +38,7 @@ class MainActivity : FlutterActivity() {
         hapticsPlugin?.release()
         indicOcrPlugin?.release()
         offlineSpeechPlugin?.release()
+        specialistPlugin?.release()
         super.onDestroy()
     }
 }

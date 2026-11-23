@@ -10,6 +10,7 @@ import '../../model_manager/presentation/model_manager_screen.dart';
 import '../../object_memory/presentation/object_memory_screen.dart';
 import '../../settings/bloc/settings_bloc.dart';
 import '../../settings/presentation/settings_screen.dart';
+import '../../shopping/presentation/shopping_screen.dart';
 import '../../vision_explorer/bloc/vision_bloc.dart';
 import '../bloc/voice_assistant_bloc.dart';
 
@@ -184,6 +185,26 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 );
                               },
+                            ),
+                            const SizedBox(height: 12),
+                            AccessibleActionTile(
+                              title: 'Scan Product / Shopping',
+                              subtitle:
+                                  'Offline ML Kit barcode + SQLite catalog + label OCR',
+                              semanticHint: 'Double tap to scan or manage offline products',
+                              icon: Icons.shopping_bag_outlined,
+                              onPressed: isBusy
+                                  ? null
+                                  : () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => ShoppingScreen(
+                                            coordinator: widget.coordinator,
+                                            database: widget.coordinator.database,
+                                          ),
+                                        ),
+                                      );
+                                    },
                             ),
                             const SizedBox(height: 12),
                             AccessibleActionTile(

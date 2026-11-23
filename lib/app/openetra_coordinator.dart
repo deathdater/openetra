@@ -16,6 +16,7 @@ import '../features/hazard_detection/bloc/hazard_detection_bloc.dart';
 import '../features/object_memory/bloc/object_memory_bloc.dart';
 import '../features/scene_understanding/bloc/scene_understanding_bloc.dart';
 import '../features/settings/bloc/settings_bloc.dart';
+import '../features/shopping/domain/shopping_assistant_service.dart';
 import '../features/smart_reader/bloc/smart_reader_bloc.dart';
 import '../features/voice_assistant/bloc/voice_assistant_bloc.dart';
 
@@ -37,9 +38,12 @@ class OpenetraCoordinator {
     required this.settingsBloc,
     this.speechController,
     this.offlineAsrProvider,
+    this.barcodeScanner,
+    ShoppingAssistantService? shoppingService,
     CurrencyRecognitionService? currencyService,
     AssistantResponse Function(AssistantResponse)? safetyOutputFilter,
-  })  : _currencyService = currencyService ?? const CurrencyRecognitionService(),
+  })  : _shoppingService = shoppingService ?? const ShoppingAssistantService(),
+        _currencyService = currencyService ?? const CurrencyRecognitionService(),
         _safetyOutputFilter = safetyOutputFilter;
 
   final AIModelOrchestrator orchestrator;
@@ -56,7 +60,9 @@ class OpenetraCoordinator {
   final SettingsBloc settingsBloc;
   final SpeechController? speechController;
   final NativeOfflineAsrProvider? offlineAsrProvider;
+  final BarcodeScannerProvider? barcodeScanner;
 
+  final ShoppingAssistantService _shoppingService;
   final CurrencyRecognitionService _currencyService;
   AssistantResponse Function(AssistantResponse)? _safetyOutputFilter;
   static const _uuid = Uuid();
@@ -357,7 +363,13 @@ class OpenetraCoordinator {
         keywords: [itemName],
       );
       _lastObservation = obs;
-      objectMemoryBloc.add(FindPersonalObject(itemName, observation: obs));
+      objectMemoryBloc.add(
+        FindPersonalObject(
+          itemName,
+          observation: obs,
+          frame: frame,
+        ),
+      );
       await Future<void>.delayed(Duration.zero);
 
       final msg = objectMemoryBloc.state.lastSearchResult ??
@@ -377,7 +389,7 @@ class OpenetraCoordinator {
     }
   }
 
-  /// Workflow E: Indian Currency Recognition
+  /// Workflow E: Indian Currency Recognition (OCR + Mirage form + optional LiteRT)
   Future<void> runIdentifyCurrency({CapturedFrame? overrideFrame}) async {
     try {
       final frame = await _captureOrReuseFrame(overrideFrame: overrideFrame);
@@ -386,10 +398,24 @@ class OpenetraCoordinator {
         task: ModelTask.latinOcr,
         overrideProfile: MirageQueryProfile.latinOcr,
       );
+      VisionObservation? formObs;
+      try {
+        formObs = await orchestrator.runVisualPerception(
+          frame,
+          task: ModelTask.scenePerception,
+          overrideProfile: const MirageQueryProfile(
+            sections: ['scene'],
+            formSchema: CurrencyRecognitionService.mirageCurrencyFormSchema,
+          ),
+        );
+      } catch (_) {
+        // Optional Mirage form probe falls back cleanly to OCR/LiteRT.
+      }
       _lastObservation = obs;
       final res = await _currencyService.identify(
         frame: frame,
         mirageObservation: obs,
+        formObservation: formObs,
         locale: _activeLocale,
       );
       await _emitSpoken(
@@ -402,8 +428,41 @@ class OpenetraCoordinator {
     } catch (e) {
       await _emitSpoken(
         spokenText:
-            'Could not analyze currency note ($e). ${CurrencyRecognitionService.nonCounterfeitDisclaimer}',
+            'Could not analyze currency note ($e). ${OpenetraLocalizer.currencyNonCounterfeitDisclaimer(_activeLocale)}',
         displaySummary: 'Currency scan error',
+        haptic: HapticPattern.degraded,
+        isDegraded: true,
+      );
+    }
+  }
+
+  /// Layered Product & Shopping Scan (Barcode + SQLite -> OCR -> Mirage Visual)
+  Future<void> runScanProduct({CapturedFrame? overrideFrame}) async {
+    try {
+      final frame = await _captureOrReuseFrame(overrideFrame: overrideFrame);
+      String? barcode;
+      if (barcodeScanner != null) {
+        barcode = await barcodeScanner!.scanFirstBarcode(frame);
+      }
+      final obs = await orchestrator.runVisualPerception(
+        frame,
+        task: ModelTask.scenePerception,
+        overrideProfile: MirageQueryProfile.sceneBalanced,
+      );
+      _lastObservation = obs;
+      final spoken = await _shoppingService.identifyProduct(
+        observation: obs,
+        detectedBarcode: barcode,
+      );
+      await _emitSpoken(
+        spokenText: spoken,
+        displaySummary: spoken,
+        sourceObservationId: obs.provenance.observationId,
+      );
+    } catch (e) {
+      await _emitSpoken(
+        spokenText: 'Unable to scan product right now: $e',
+        displaySummary: 'Product scan failed',
         haptic: HapticPattern.degraded,
         isDegraded: true,
       );

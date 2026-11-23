@@ -10,11 +10,13 @@ import '../core/inference/ai_model_orchestrator.dart';
 import '../core/inference/ai_model_registry.dart';
 import '../core/inference/mirage/mirage_inference_provider.dart';
 import '../core/inference/model_provider.dart';
+import '../core/inference/specialist/native_specialist_providers.dart';
 import '../core/resource_management/bloc/device_resource_bloc.dart';
 import '../core/resource_management/device_resource_manager.dart';
 import '../core/safety/bloc/safety_bloc.dart';
 import '../core/safety/openetra_safety_policy.dart';
 import '../core/storage/openetra_database.dart';
+import '../features/currency/domain/currency_recognition_service.dart';
 import '../features/hazard_detection/bloc/hazard_detection_bloc.dart';
 import '../features/hazard_detection/domain/hazard_intelligence_engine.dart';
 import '../features/model_manager/bloc/model_manager_bloc.dart';
@@ -24,6 +26,8 @@ import '../features/scene_understanding/bloc/scene_understanding_bloc.dart';
 import '../features/scene_understanding/domain/contextual_query_resolver.dart';
 import '../features/scene_understanding/domain/scene_understanding_engine.dart';
 import '../features/settings/bloc/settings_bloc.dart';
+import '../features/shopping/data/sqlite_product_catalog.dart';
+import '../features/shopping/domain/shopping_assistant_service.dart';
 import '../features/smart_reader/bloc/smart_reader_bloc.dart';
 import '../features/smart_reader/data/native_indic_ocr_provider.dart';
 import '../features/smart_reader/domain/ocr_router.dart';
@@ -104,11 +108,16 @@ class OpenetraDependencies {
     );
     final indicOcr = NativeIndicOcrProvider();
     final offlineAsr = NativeOfflineAsrProvider();
+    final embeddingProvider = NativeEmbeddingProvider();
+    final currencyClassifier = NativeCurrencyClassifierProvider();
+    final barcodeScanner = NativeBarcodeScannerProvider();
     final orchestrator = AIModelOrchestrator(
       registry: registry,
       resourceManager: resMgr,
       visionProvider: vision,
       indicOcrProviders: [indicOcr],
+      currencyClassifier: currencyClassifier,
+      embeddingProvider: embeddingProvider,
     );
 
     final audioBloc = AudioBloc(announcer: announcer, speechController: speech);
@@ -146,13 +155,22 @@ class OpenetraDependencies {
       ),
     );
     const safetyPolicy = OpenetraSafetyPolicy();
-    final objectBloc = ObjectMemoryBloc(database: database);
+    final objectBloc = ObjectMemoryBloc(
+      database: database,
+      embeddingProvider: embeddingProvider,
+    );
     final modelBloc = ModelManagerBloc(
       registry: registry,
       visionProvider: vision,
       database: database,
     );
     final settingsBloc = SettingsBloc(database: database);
+    final shoppingService = ShoppingAssistantService(
+      catalogLookup: SqliteProductCatalogLookup(database),
+    );
+    final currencyService = CurrencyRecognitionService(
+      classifier: currencyClassifier,
+    );
 
     final coordinator = OpenetraCoordinator(
       orchestrator: orchestrator,
@@ -169,6 +187,9 @@ class OpenetraDependencies {
       settingsBloc: settingsBloc,
       speechController: speech,
       offlineAsrProvider: offlineAsr,
+      barcodeScanner: barcodeScanner,
+      shoppingService: shoppingService,
+      currencyService: currencyService,
       safetyOutputFilter: (r) => safetyPolicy.enforceResponse(r),
     );
 
