@@ -332,7 +332,7 @@ class OpenetraCoordinator {
       }
       await flashlightController?.endAuthorizedTaskSession();
       await _emitSpoken(
-        spokenText: 'Continuous scene description stopped.',
+        spokenText: OpenetraLocalizer.continuousSceneStopped(_activeLocale),
         displaySummary: 'Continuous scene stopped',
       );
       return;
@@ -342,8 +342,10 @@ class OpenetraCoordinator {
     final breakDuration =
         breakDurationOverride ?? Duration(seconds: _continuousSceneBreakSeconds);
     await _emitSpoken(
-      spokenText:
-          'Continuous scene description started, with a ${breakDuration.inSeconds} second break after each description.',
+      spokenText: OpenetraLocalizer.continuousSceneStarted(
+        breakDuration.inSeconds,
+        _activeLocale,
+      ),
       displaySummary: 'Continuous scene active (${breakDuration.inSeconds}s break)',
       haptic: HapticPattern.confirm,
     );

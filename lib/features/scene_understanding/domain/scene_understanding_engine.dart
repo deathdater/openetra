@@ -308,41 +308,12 @@ class SceneUnderstandingEngine {
 
     if (!isEnglish) {
       parts.add(
-        OpenetraLocalizer.sceneIntro(
-          environment: graph.environmentCategory,
-          surface: graph.surface,
-          lighting: graph.lighting,
+        OpenetraLocalizer.composeNaturalIndicScene(
+          graph: graph,
           locale: locale,
         ),
       );
-
-      final confidentNodes = graph.nodes.where((n) => !n.isUncertain).toList();
-      if (confidentNodes.isNotEmpty) {
-        final topItems = confidentNodes
-            .take(4)
-            .map((n) => _formatNodePhrase(n, locale: locale))
-            .join(', ');
-        parts.add(OpenetraLocalizer.sceneItemsLead(topItems, locale));
-      }
-
-      if (graph.readableTexts.isNotEmpty) {
-        parts.add(
-          OpenetraLocalizer.sceneTextLead(
-            graph.readableTexts.take(3).join(', '),
-            locale,
-          ),
-        );
-      }
-
-      final uncertain =
-          graph.uncertainNodes.take(2).map((n) => n.name).toList();
-      if (uncertain.isNotEmpty) {
-        parts.add(
-          OpenetraLocalizer.sceneUncertainLead(uncertain.join(', '), locale),
-        );
-      }
-
-      return parts.join(' ');
+      return parts.where((p) => p.trim().isNotEmpty).join(' ');
     }
 
     // Human-natural English scene narration grouped by spatial zones.
