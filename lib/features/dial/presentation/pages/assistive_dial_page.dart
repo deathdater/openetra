@@ -155,7 +155,18 @@ class _AssistiveDialPageState extends State<AssistiveDialPage> {
         ],
       ),
       body: SafeArea(
-        child: BlocConsumer<AssistiveDialBloc, AssistiveDialState>(
+        child: BlocListener<SettingsBloc, SettingsState>(
+          listenWhen: (prev, curr) =>
+              prev.preferences.preferredLanguage !=
+              curr.preferences.preferredLanguage,
+          listener: (context, settingsState) {
+            context.read<AssistiveDialBloc>().add(
+                  DialUpdatePreferences(
+                    locale: settingsState.preferences.preferredLanguage,
+                  ),
+                );
+          },
+          child: BlocConsumer<AssistiveDialBloc, AssistiveDialState>(
           listener: (context, state) {
             if (state.pendingScreenRoute != null) {
               final route = state.pendingScreenRoute!;
@@ -212,6 +223,7 @@ class _AssistiveDialPageState extends State<AssistiveDialPage> {
                       menu: bloc.currentMenu,
                       focusedIndex: state.focusedIndex,
                       phase: state.phase,
+                      locale: activeLang,
                       activeOperationTitle: state.activeOperationTitle,
                       reducedMotion: state.reducedMotion,
                       onBrowsePrevious: () =>
@@ -229,6 +241,7 @@ class _AssistiveDialPageState extends State<AssistiveDialPage> {
             );
           },
         ),
+      ),
       ),
     );
   }

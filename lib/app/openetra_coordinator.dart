@@ -12,6 +12,7 @@ import '../core/camera/camera_controller_bridge.dart';
 import '../core/domain/entities/entities.dart';
 import '../core/inference/ai_model_orchestrator.dart';
 import '../core/inference/model_provider.dart';
+import '../core/localization/dial_localizer.dart';
 import '../core/localization/openetra_localizer.dart';
 import '../core/resource_management/bloc/device_resource_bloc.dart';
 import '../core/safety/bloc/safety_bloc.dart';
@@ -337,7 +338,7 @@ class OpenetraCoordinator {
       );
     } catch (e) {
       await _emitSpoken(
-        spokenText: 'Unable to describe surroundings right now: $e',
+        spokenText: DialLocalizer.sceneAnalysisError(_activeLocale),
         displaySummary: 'Scene analysis error',
         priority: SpeechPriority.warning,
         haptic: HapticPattern.degraded,
@@ -570,8 +571,7 @@ class OpenetraCoordinator {
       );
     } catch (e) {
       await _emitSpoken(
-        spokenText:
-            'Hazard scan unavailable right now ($e). Rely on your white cane and proceed carefully.',
+        spokenText: DialLocalizer.hazardUnavailableError(_activeLocale),
         displaySummary: 'Hazard scan degraded',
         priority: SpeechPriority.warning,
         haptic: HapticPattern.degraded,
@@ -587,7 +587,10 @@ class OpenetraCoordinator {
       hazardBloc.add(const ResetHazardTracker());
       await cameraSource.stop();
       await _emitSpoken(
-        spokenText: 'Hazard awareness paused.',
+        spokenText: DialLocalizer.hazardModeToggled(
+          active: false,
+          locale: _activeLocale,
+        ),
         displaySummary: 'Hazard mode paused',
       );
       return;
@@ -595,8 +598,10 @@ class OpenetraCoordinator {
 
     _hazardLoopActive = true;
     await _emitSpoken(
-      spokenText:
-          'Hazard awareness active. Point camera ahead and slightly downward. Continue using your white cane.',
+      spokenText: DialLocalizer.hazardModeToggled(
+        active: true,
+        locale: _activeLocale,
+      ),
       displaySummary: 'Hazard mode active',
       haptic: HapticPattern.caution,
     );
@@ -635,8 +640,7 @@ class OpenetraCoordinator {
       if (result == null || result.isEmpty) {
         final note = result?.missingPackNotice;
         await _emitSpoken(
-          spokenText: note ??
-              'No readable text detected clearly. Hold the page steady about 30 centimeters from the camera.',
+          spokenText: note ?? DialLocalizer.noReadableText(_activeLocale),
           displaySummary: 'No text detected',
           haptic: HapticPattern.caution,
         );
@@ -661,7 +665,7 @@ class OpenetraCoordinator {
       );
     } catch (e) {
       await _emitSpoken(
-        spokenText: 'Unable to read text right now: $e',
+        spokenText: DialLocalizer.textReadError(_activeLocale),
         displaySummary: 'Text reading failed',
         priority: SpeechPriority.warning,
         haptic: HapticPattern.degraded,
@@ -708,7 +712,7 @@ class OpenetraCoordinator {
       );
     } catch (e) {
       await _emitSpoken(
-        spokenText: 'Object search failed: $e',
+        spokenText: DialLocalizer.objectSearchError(_activeLocale),
         displaySummary: 'Object search error',
         haptic: HapticPattern.degraded,
         isDegraded: true,
@@ -731,8 +735,7 @@ class OpenetraCoordinator {
     try {
       final profiles = await database.listPersonalObjects();
       if (profiles.isEmpty) {
-        const msg =
-            'No personal objects are registered yet. Open Manage Personal Objects to save your items first.';
+        final msg = DialLocalizer.noRegisteredObjects(_activeLocale);
         await _emitSpoken(
           spokenText: msg,
           displaySummary: 'No registered objects yet',
@@ -785,8 +788,10 @@ class OpenetraCoordinator {
       }
 
       final checkedNames = keywords.take(4).join(', ');
-      final msg =
-          'Could not spot your registered items ($checkedNames) in the current camera view. Try panning slowly.';
+      final msg = DialLocalizer.registeredObjectsNotSpotted(
+        checkedNames,
+        _activeLocale,
+      );
       await _emitSpoken(
         spokenText: msg,
         displaySummary: 'Registered items not in view',
@@ -795,7 +800,7 @@ class OpenetraCoordinator {
       );
     } catch (e) {
       await _emitSpoken(
-        spokenText: 'Registered object search failed: $e',
+        spokenText: DialLocalizer.objectSearchError(_activeLocale),
         displaySummary: 'Object search error',
         haptic: HapticPattern.degraded,
         isDegraded: true,

@@ -5,6 +5,7 @@ import '../../../core/assistive/assistive_action.dart';
 import '../../../core/assistive/audio_arbitrator.dart';
 import '../../../core/assistive/task_orchestrator.dart';
 import '../../../core/haptics/haptic_feedback_manager.dart';
+import '../../../core/localization/dial_localizer.dart';
 import '../models/dial_menu_node.dart';
 
 abstract class AssistiveDialEvent extends Equatable {
@@ -250,8 +251,15 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
   ) async {
     final root = _menuTree[OpenetraDialMenuTree.rootId]!;
     final first = root.options.first;
-    final intro =
-        'Openetra ready. ${root.spokenIntro} ${first.spokenAnnouncement(detailed: state.detailedAnnouncements)}';
+    final intro = DialLocalizer.openetraReady(
+      DialLocalizer.menuIntro(root, event.locale),
+      DialLocalizer.optionAnnouncement(
+        first,
+        locale: event.locale,
+        detailed: state.detailedAnnouncements,
+      ),
+      event.locale,
+    );
     audioArbitrator.announceSelection(spokenText: intro, locale: event.locale);
     emit(state.copyWith(
       menuId: OpenetraDialMenuTree.rootId,
@@ -297,8 +305,11 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
   Future<void> _focusIndex(int idx, Emitter<AssistiveDialState> emit) async {
     _exitArmedAt = null;
     final option = currentMenu.options[idx];
-    final spoken =
-        option.spokenAnnouncement(detailed: state.detailedAnnouncements);
+    final spoken = DialLocalizer.optionAnnouncement(
+      option,
+      locale: state.locale,
+      detailed: state.detailedAnnouncements,
+    );
     unawaited(hapticManager.onFocusChanged());
     audioArbitrator.announceSelection(spokenText: spoken, locale: state.locale);
     emit(state.copyWith(
@@ -318,6 +329,7 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
     if (state.isBusy) return;
     _exitArmedAt = null;
     final option = focusedOption;
+    final locTitle = DialLocalizer.optionTitle(option, state.locale);
 
     // Sensitive option confirmation gate (e.g., Emergency Assistance).
     if (option.requiresConfirmation &&
@@ -327,8 +339,7 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
       } else {
         unawaited(hapticManager.onOptionSelected());
       }
-      final prompt =
-          'Confirm ${option.title}. Slide up again to confirm, or slide down to cancel.';
+      final prompt = DialLocalizer.confirmPrompt(locTitle, state.locale);
       audioArbitrator.announceSelection(
         spokenText: prompt,
         locale: state.locale,
@@ -348,7 +359,8 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
         if (child == null || child.options.isEmpty) {
           await _emitUnavailable(
             emit,
-            option.unavailableMessage ?? '${option.title} is unavailable.',
+            option.unavailableMessage ??
+                DialLocalizer.unavailable(locTitle, state.locale),
           );
           return;
         }
@@ -362,7 +374,7 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
         ];
         final first = child.options.first;
         final spoken =
-            '${child.spokenIntro} ${first.spokenAnnouncement(detailed: state.detailedAnnouncements)}';
+            '${DialLocalizer.menuIntro(child, state.locale)} ${DialLocalizer.optionAnnouncement(first, locale: state.locale, detailed: state.detailedAnnouncements)}';
         audioArbitrator.announceSelection(
           spokenText: spoken,
           locale: state.locale,
@@ -382,11 +394,14 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
       case DialOptionKind.screenRoute:
         final route = option.screenRoute;
         if (route == null) {
-          await _emitUnavailable(emit, '${option.title} is unavailable.');
+          await _emitUnavailable(
+            emit,
+            DialLocalizer.unavailable(locTitle, state.locale),
+          );
           return;
         }
         unawaited(hapticManager.onOptionSelected());
-        final spoken = 'Opening ${option.title}.';
+        final spoken = DialLocalizer.opening(locTitle, state.locale);
         audioArbitrator.announceSelection(
           spokenText: spoken,
           locale: state.locale,
@@ -404,7 +419,8 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
         await hapticManager.onOptionSelected();
         await onFlashlightExplicit?.call(true);
         emit(state.copyWith(
-          statusAnnouncement: 'Flashlight turned on.',
+          statusAnnouncement:
+              DialLocalizer.flashlightStatus(on: true, locale: state.locale),
           clearPendingConfirmation: true,
         ));
 
@@ -412,7 +428,8 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
         await hapticManager.onOptionSelected();
         await onFlashlightExplicit?.call(false);
         emit(state.copyWith(
-          statusAnnouncement: 'Flashlight turned off.',
+          statusAnnouncement:
+              DialLocalizer.flashlightStatus(on: false, locale: state.locale),
           clearPendingConfirmation: true,
         ));
 
@@ -420,7 +437,7 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
         unawaited(hapticManager.onOptionSelected());
         await onToggleContinuousHazard?.call();
         emit(state.copyWith(
-          statusAnnouncement: 'Toggled continuous hazard cue mode.',
+          statusAnnouncement: DialLocalizer.completed(locTitle, state.locale),
           clearPendingConfirmation: true,
         ));
 
@@ -428,21 +445,24 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
         unawaited(hapticManager.onOptionSelected());
         await onToggleContinuousScene?.call();
         emit(state.copyWith(
-          statusAnnouncement: 'Toggled continuous scene understanding mode.',
+          statusAnnouncement: DialLocalizer.completed(locTitle, state.locale),
           clearPendingConfirmation: true,
         ));
 
       case DialOptionKind.action:
         final actionId = option.actionId;
         if (actionId == null) {
-          await _emitUnavailable(emit, '${option.title} is unavailable.');
+          await _emitUnavailable(
+            emit,
+            DialLocalizer.unavailable(locTitle, state.locale),
+          );
           return;
         }
         unawaited(hapticManager.onOperationStarted());
-        final startMsg = 'Starting ${option.title}.';
+        final startMsg = DialLocalizer.starting(locTitle, state.locale);
         emit(state.copyWith(
           phase: DialLifecyclePhase.executing,
-          activeOperationTitle: option.title,
+          activeOperationTitle: locTitle,
           statusAnnouncement: startMsg,
           clearPendingConfirmation: true,
         ));
@@ -454,14 +474,14 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
         if (!res.accepted) {
           final reason = res.availability?.reason ??
               res.finalSnapshot.errorMessage ??
-              '${option.title} is currently unavailable.';
+              DialLocalizer.unavailable(locTitle, state.locale);
           await _emitUnavailable(emit, reason);
         } else {
           await hapticManager.onOperationCompleted();
           emit(state.copyWith(
             phase: DialLifecyclePhase.completed,
             clearActiveOperation: true,
-            statusAnnouncement: '${option.title} completed.',
+            statusAnnouncement: DialLocalizer.completed(locTitle, state.locale),
           ));
         }
     }
@@ -474,7 +494,10 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
     // 1. Cancel pending confirmation safely.
     if (state.phase == DialLifecyclePhase.confirmingAction) {
       await hapticManager.onNavigateBack();
-      final msg = 'Confirmation cancelled. ${focusedOption.title}.';
+      final msg = DialLocalizer.confirmationCancelled(
+        DialLocalizer.optionTitle(focusedOption, state.locale),
+        state.locale,
+      );
       audioArbitrator.announceSelection(spokenText: msg, locale: state.locale);
       emit(state.copyWith(
         phase: currentMenu.isRoot
@@ -504,7 +527,7 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
         now.difference(_exitArmedAt!) <= const Duration(seconds: 5)) {
       _exitArmedAt = null;
       await hapticManager.onNavigateBack();
-      const msg = 'Closing the dial.';
+      final msg = DialLocalizer.closingDial(state.locale);
       audioArbitrator.announceSelection(spokenText: msg, locale: state.locale);
       emit(state.copyWith(
         phase: DialLifecyclePhase.exiting,
@@ -515,7 +538,7 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
 
     _exitArmedAt = now;
     await hapticManager.onRootExitRequested();
-    const armMsg = 'At main menu. Slide down again within 5 seconds to exit.';
+    final armMsg = DialLocalizer.exitArmed(state.locale);
     audioArbitrator.announceSelection(spokenText: armMsg, locale: state.locale);
     emit(state.copyWith(
       phase: DialLifecyclePhase.exitArmed,
@@ -532,8 +555,15 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
     final restoredOpt =
         parentNode.options[parent.focusedIndex.clamp(0, parentNode.options.length - 1)];
     unawaited(hapticManager.onNavigateBack());
-    final spoken =
-        'Back to ${parentNode.title}. ${restoredOpt.spokenAnnouncement(detailed: state.detailedAnnouncements)}';
+    final spoken = DialLocalizer.backTo(
+      DialLocalizer.menuTitle(parentNode, state.locale),
+      DialLocalizer.optionAnnouncement(
+        restoredOpt,
+        locale: state.locale,
+        detailed: state.detailedAnnouncements,
+      ),
+      state.locale,
+    );
     audioArbitrator.announceSelection(spokenText: spoken, locale: state.locale);
     emit(state.copyWith(
       menuId: parentNode.id,
@@ -551,7 +581,7 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
     emit(state.copyWith(phase: DialLifecyclePhase.cancelling));
     await taskOrchestrator.cancelCurrentTask(reason: 'Cancelled from dial');
     await hapticManager.onNavigateBack();
-    const msg = 'Operation cancelled.';
+    final msg = DialLocalizer.operationCancelled(state.locale);
     audioArbitrator.announceSelection(spokenText: msg, locale: state.locale);
     emit(state.copyWith(
       phase: currentMenu.isRoot
@@ -582,9 +612,11 @@ class AssistiveDialBloc extends Bloc<AssistiveDialEvent, AssistiveDialState> {
   ) async {
     final text = state.isBusy
         ? (state.activeOperationTitle != null
-            ? '${state.activeOperationTitle} in progress.'
+            ? DialLocalizer.inProgress(state.activeOperationTitle!, state.locale)
             : state.statusAnnouncement)
-        : focusedOption.spokenAnnouncement(
+        : DialLocalizer.optionAnnouncement(
+            focusedOption,
+            locale: state.locale,
             detailed: state.detailedAnnouncements,
           );
     audioArbitrator.announceSelection(spokenText: text, locale: state.locale);

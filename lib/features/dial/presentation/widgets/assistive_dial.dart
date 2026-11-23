@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/localization/dial_localizer.dart';
 import '../../domain/dial_gesture_recognizer.dart';
 import '../../models/dial_menu_node.dart';
 import 'dial_center.dart';
@@ -22,6 +23,7 @@ class AssistiveDial extends StatefulWidget {
     required this.onSlideUp,
     required this.onSlideDown,
     required this.onRepeat,
+    this.locale = 'en-IN',
     this.activeOperationTitle,
     this.reducedMotion = false,
   });
@@ -34,6 +36,7 @@ class AssistiveDial extends StatefulWidget {
   final VoidCallback onSlideUp;
   final VoidCallback onSlideDown;
   final VoidCallback onRepeat;
+  final String locale;
   final String? activeOperationTitle;
   final bool reducedMotion;
 
@@ -200,11 +203,11 @@ class _AssistiveDialState extends State<AssistiveDial> {
 
                 const SizedBox(height: 14),
 
-                // Active Option Title & Purpose
+                // Active Option Title & Purpose (localized to selected language)
                 Text(
                   isBusy && widget.activeOperationTitle != null
                       ? widget.activeOperationTitle!
-                      : focused.title,
+                      : DialLocalizer.optionTitle(focused, widget.locale),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
@@ -212,13 +215,13 @@ class _AssistiveDialState extends State<AssistiveDial> {
                 Text(
                   isBusy
                       ? 'Working offline on device...'
-                      : focused.spokenDescription,
+                      : DialLocalizer.optionDescription(focused, widget.locale),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Option ${safeIdx + 1} of ${options.length} • ${widget.menu.title}',
+                  'Option ${safeIdx + 1} of ${options.length} • ${DialLocalizer.menuTitle(widget.menu, widget.locale)}',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: OpenetraTheme.paletteOf(context).primary,

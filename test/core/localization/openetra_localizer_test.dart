@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openetra/core/domain/entities/entities.dart';
 import 'package:openetra/core/inference/mirage/mirage_response_parser.dart';
+import 'package:openetra/core/localization/dial_localizer.dart';
 import 'package:openetra/core/localization/openetra_localizer.dart';
+import 'package:openetra/features/dial/models/dial_menu_node.dart';
 import 'package:openetra/core/safety/safety_speech_guard.dart';
 import 'package:openetra/features/scene_understanding/domain/scene_understanding_engine.dart';
 
@@ -170,6 +172,26 @@ void main() {
       expect(spoken, isNot(contains('living room')), reason: 'Leaked English setting in ${entry.key}');
       expect(spoken, isNot(contains('couch')), reason: 'Leaked English object in ${entry.key}');
       expect(spoken, isNot(contains('(')), reason: 'Parenthetical dump in ${entry.key}: $spoken');
+    }
+  });
+
+  test('DialLocalizer localizes all dial menus, options, prompts, and errors across all 7 Indian languages without English leakage', () {
+    final tree = OpenetraDialMenuTree.buildDefaultTree();
+    final indicLocales = const ['hi-IN', 'kn-IN', 'ta-IN', 'te-IN', 'ml-IN', 'mr-IN', 'bn-IN'];
+
+    for (final locale in indicLocales) {
+      for (final node in tree.values) {
+        final locMenu = DialLocalizer.menuTitle(node, locale);
+        expect(locMenu, isNot(node.title), reason: 'Menu ${node.id} not localized for $locale');
+        for (final opt in node.options) {
+          final spoken = DialLocalizer.optionAnnouncement(opt, locale: locale, detailed: true);
+          expect(spoken, isNot(contains(opt.title)), reason: 'Option ${opt.id} leaked English in $locale: $spoken');
+          expect(spoken, isNot(contains('Opens submenu')), reason: 'Submenu hint leaked English in $locale');
+        }
+      }
+      expect(DialLocalizer.sceneAnalysisError(locale), isNot(contains('Unable to describe')));
+      expect(DialLocalizer.noRegisteredObjects(locale), isNot(contains('No personal objects')));
+      expect(DialLocalizer.exitArmed(locale), isNot(contains('Slide down')));
     }
   });
 }

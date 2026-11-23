@@ -158,6 +158,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             context
                                 .read<AudioBloc>()
                                 .add(UpdateSpeechConfig(locale: lang.locale));
+                            widget.dialBloc?.add(
+                              DialUpdatePreferences(locale: lang.locale),
+                            );
                             setState(() => _languagesExpanded = false);
                           },
                         ),
