@@ -1,26 +1,22 @@
-# Miscellaneous
+# OS & Filesystem (macOS / ExFAT AppleDouble / Windows / Linux)
 ._*
-*.class
-*.log
-*.pyc
-*.swp
 .DS_Store
-.atom/
-.buildlog/
-.history
-.svn/
-migrate_working_dir/
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
+*~
 
-# IntelliJ / Android Studio
+# IDEs & Editors
 *.iml
 *.ipr
 *.iws
 .idea/
-
-# VS Code
 .vscode/
+.atom/
+.history
 
-# Flutter / Dart
+# Flutter / Dart / Pub
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
@@ -28,9 +24,17 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
-/android/**/generated/
+coverage/
+doc/api/
+.metadata
+
+# Android / Gradle / Native C++ (.cxx)
 /android/.gradle/
+/android/.cxx/
+/android/app/.cxx/
+/android/**/generated/
 /android/local.properties
+/android/key.properties
 /android/app/debug/
 /android/app/profile/
 /android/app/release/
@@ -38,7 +42,26 @@ migrate_working_dir/
 /android/gradlew
 /android/gradlew.bat
 !/android/gradle/wrapper/gradle-wrapper.jar
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
 
-# Large local downloaded test binaries outside pinned third_party
+# Signing Keys & Local Secrets
+*.jks
+*.keystore
+*.p12
+*.pem
+.env
+.env.*
+
+# Logs & Temporary Files
+*.log
+*.pyc
+*.swp
 *.tmp
 *.bak
+.buildlog/
+.svn/
+migrate_working_dir/
